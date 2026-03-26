@@ -17,6 +17,10 @@
 - Observed failure: release-please failed with "GitHub Actions is not permitted to create or approve pull requests." → Root cause: repo-level Actions setting must have "Allow GitHub Actions to create and approve pull requests" enabled (Settings → Actions → General). This is required in addition to declaring `pull-requests: write` in the workflow. Consumer repos must enable this setting before the first run.
 - Observed failure: release-please not picking up conventional commit messages → Root cause: `.release-please-config.json` and `.release-please-manifest.json` were missing from the repo root. The config file is required for release-please to know the release type and package layout; the manifest seeds the starting version. Both files must exist in the repo before the first pipeline run.
 - Q: Can the reusable workflow embed default release-please config inline so consumers don't need to create a config file, while still allowing override via a config file if the consumer chooses? → A: Yes — the reusable workflow writes a default `.release-please-config.json` to a temp path, then checks if the consumer repo has its own config at the path specified by the `config-file` input; if found, the consumer's file is used instead. This makes zero-config adoption possible while preserving full consumer control.
+- Decision: Replace `googleapis/release-please-action` with `cycjimmy/semantic-release-action` (SHA-pinned to v6 latest) as the release engine.
+- Q: Does the switch to semantic-release require keeping the Release PR review gate? → A: No — accept the immediate-release model; semantic-release publishes a tag and GitHub Release directly on push to `main` with no intermediate PR. This satisfies all acceptance scenarios; the Release PR was an implementation artifact of release-please, not a stated requirement.
+- Q: With semantic-release replacing release-please, how is zero-config adoption (FR-014) preserved? → A: Embed the semantic-release plugin configuration inline in the reusable workflow `with:` block. Consumers who need custom configuration can commit their own `.releaserc.json`; if present it takes precedence.
+- Q: Should `cycjimmy/semantic-release-action` be pinned to a commit SHA? → A: Yes — SHA-pin to the commit SHA for v6 latest, satisfying Constitution Principle III. Mutable `@v6` tag is not acceptable.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -132,18 +136,15 @@ path, and produces a new version tag and GitHub Release.
 
 ### Edge Cases
 
-- **Missing `.release-please-config.json`**: If this file is absent from the repo
-  root, release-please will not parse any commits and will produce no Release PR
-  and no version bump, silently succeeding with no output. Both
-  `.release-please-config.json` (release type + package layout) and
-  `.release-please-manifest.json` (current version seed) must be committed to the
-  repo root before the first pipeline run.
-- **Repo Actions setting not enabled**: If "Allow GitHub Actions to create and
-  approve pull requests" is disabled in repo Settings → Actions → General,
-  release-please will fail with "GitHub Actions is not permitted to create or
-  approve pull requests." The `pull-requests: write` workflow permission is
-  necessary but not sufficient — the repo-level setting must also be enabled.
-  This must be documented as a prerequisite in the consumer README.
+- **Missing `.releaserc.json`**: If no `.releaserc.json` is present in the consumer
+  repo root, the reusable workflow's inline default configuration is used
+  automatically — no action required. If a `.releaserc.json` is present but
+  contains invalid JSON or unsupported plugin references, semantic-release will
+  fail with a configuration error.
+- **`pull-requests: write` no longer required**: semantic-release does not create a
+  Release PR; it publishes directly. Only `contents: write` is required. The
+  repo-level "Allow GitHub Actions to create and approve pull requests" setting is
+  no longer a prerequisite.
 - **Concurrent merges**: Two PRs merged in rapid succession are serialized by a
   `concurrency` group (`cancel-in-progress: false`) on `release.yml`; runs queue
   rather than overlap, so each gets a release attempt in order.
@@ -169,13 +170,13 @@ path, and produces a new version tag and GitHub Release.
   other repositories can reference it with a single `uses:` line.
 - **FR-005**: The workflow MUST expose documented inputs allowing consumers to
   override defaults such as release branch name and tag prefix.
-- **FR-014**: The reusable workflow MUST provide a built-in default
-  release-please configuration (equivalent to `release-type: simple`, root package)
-  so that consumer repos require zero additional config files to get started. If
-  the consumer repo has a config file at the path specified by the `config-file`
-  input, that file MUST take precedence over the built-in default. This is
-  implemented by writing a default config to a temp path, then substituting the
-  consumer's file if it exists.
+- **FR-014**: The reusable workflow MUST provide built-in default semantic-release
+  plugin configuration inline (via the action's `with:` block) so that consumer
+  repos require zero additional config files to get started. If a consumer repo
+  provides a `.releaserc.json` at the repo root, that file MUST take precedence
+  over the inline defaults. The release engine is `cycjimmy/semantic-release-action`
+  (SHA-pinned to v6 latest); it publishes a tag and GitHub Release directly on push
+  to `main` with no intermediate Release PR.
 - **FR-006**: The workflow MUST update the major version pointer tag (e.g., `v1`)
   after every PATCH or MINOR release on that major line.
 - **FR-007**: The workflow MUST skip version creation (no tag, no release) when all
@@ -185,13 +186,13 @@ path, and produces a new version tag and GitHub Release.
   tags, starting at `v1.0.0`.
 - **FR-009**: All third-party actions used within the workflow MUST be pinned to
   specific commit SHAs (not mutable tags).
-- **FR-010**: The reusable workflow MUST declare `contents: write` and
-  `pull-requests: write` permissions and no broader scopes. The self-release caller
-  workflow (`release.yml`) and consumer workflows MUST also declare these same
-  permissions on the calling job (GitHub Actions `workflow_call` callers control the
-  `GITHUB_TOKEN` scope ceiling; the reusable workflow cannot self-elevate).
-  Authentication MUST use `GITHUB_TOKEN` exclusively; no PAT input is accepted or
-  required.
+- **FR-010**: The reusable workflow MUST declare `contents: write` permission and no
+  broader scopes. `pull-requests: write` is not required — semantic-release does not
+  create a Release PR. The self-release caller workflow (`release.yml`) and consumer
+  workflows MUST also declare `contents: write` on the calling job (GitHub Actions
+  `workflow_call` callers control the `GITHUB_TOKEN` scope ceiling; the reusable
+  workflow cannot self-elevate). Authentication MUST use `GITHUB_TOKEN` exclusively;
+  no PAT input is accepted or required.
 - **FR-012**: The self-release caller workflow (`release.yml`) MUST declare a
   `concurrency` group (`group: release`, `cancel-in-progress: false`) to serialize
   runs. Note: this implements "last pending wins" — at most one run executes and one
@@ -257,13 +258,14 @@ path, and produces a new version tag and GitHub Release.
 - Consumer repositories (and this repo itself) MUST have "Allow GitHub Actions to
   create and approve pull requests" enabled in Settings → Actions → General before
   the first pipeline run.
-- Consumer repositories do NOT need to provide a `.release-please-config.json` file;
-  the reusable workflow provides a built-in default. Consumers MAY provide their own
-  config file at the path specified by the `config-file` input to override the
-  default. The `.release-please-manifest.json` is created and managed automatically
-  by release-please after the first run; no manual creation is required. This is required for release-please to create its Release
-  PR; declaring `pull-requests: write` in the workflow is necessary but not
-  sufficient without this repo-level setting.
+- Consumer repositories do NOT need to provide a `.releaserc.json` file; the
+  reusable workflow provides built-in default semantic-release plugin configuration
+  inline. Consumers MAY provide their own `.releaserc.json` at the repo root to
+  override the inline defaults. No manifest file is required — semantic-release
+  derives the current version from the highest existing Git tag.
+- The `pull-requests: write` permission and the repo-level "Allow GitHub Actions to
+  create and approve pull requests" setting are no longer required; semantic-release
+  does not create a Release PR.
 - Release pipeline failure visibility relies on GitHub's built-in notification
   system (email to commit author and repo watchers); no custom alerting is
   implemented within the workflow.

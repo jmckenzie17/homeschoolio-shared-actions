@@ -5,48 +5,15 @@ Automates semantic versioning for any homeschoolio repository. On each push to
 calculates the next SemVer, creates a Git tag, publishes a GitHub Release, and
 updates the moving major version pointer (e.g. `v1`).
 
----
-
-## Prerequisites
-
-Two one-time setup steps are required before the first pipeline run:
-
-### 1. Enable Actions PR creation
-
-**Settings → Actions → General → Workflow permissions**
-→ Check **"Allow GitHub Actions to create and approve pull requests"**
-
-> Without this, release-please will fail with:
-> `GitHub Actions is not permitted to create or approve pull requests.`
->
-> Note: declaring `pull-requests: write` in your workflow is necessary but **not
-> sufficient** — this repo-level setting must also be enabled.
-
-### 2. (Optional) Add a release-please config file
-
-The workflow includes a built-in default configuration (`release-type: simple`,
-root package). **No config files are required** for standard single-package repos.
-
-If you need custom configuration (e.g., changelog sections, monorepo packages,
-bump strategies), create `.release-please-config.json` in your repo root — it will
-automatically override the built-in default:
-
-```json
-{
-  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
-  "release-type": "simple",
-  "packages": { ".": {} }
-}
-```
-
-The `.release-please-manifest.json` (version tracking file) is created and managed
-automatically by release-please after the first run — you do not need to create it.
+Powered by [`cycjimmy/semantic-release-action`](https://github.com/cycjimmy/semantic-release-action)
+v6.0.0 (SHA-pinned). Releases are published **directly** on push — no intermediate
+Release PR required.
 
 ---
 
 ## Quick Start
 
-Create two files in your consumer repo:
+Create one file in your consumer repo:
 
 **`.github/workflows/release.yml`**:
 ```yaml
@@ -60,21 +27,27 @@ jobs:
   release:
     permissions:
       contents: write
-      pull-requests: write
     uses: jmckenzie17/homeschoolio-shared-actions/.github/workflows/semver-release.yml@v1
     secrets: inherit
 ```
 
-**`.release-please-config.json`**:
-```json
-{
-  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
-  "release-type": "simple",
-  "packages": { ".": {} }
-}
-```
+That's it. No config files required — the workflow provides built-in default plugin
+configuration for standard single-package repos.
 
-That's it. Two files, under 20 lines of workflow YAML.
+---
+
+## Prerequisites
+
+Only one one-time setup step is required:
+
+### Enable `contents: write` on the calling job
+
+Declare `permissions: contents: write` on the calling job (shown in the Quick Start
+above). GitHub Actions `workflow_call` callers control the `GITHUB_TOKEN` permission
+scope — the reusable workflow cannot self-elevate.
+
+> **Note**: `pull-requests: write` is **not** needed. semantic-release publishes
+> releases directly without creating a Release PR.
 
 ---
 
@@ -83,8 +56,7 @@ That's it. Two files, under 20 lines of workflow YAML.
 | Input | Type | Default | Description |
 |-------|------|---------|-------------|
 | `release-branch` | `string` | `"main"` | Branch that triggers release evaluation on push. Override if your default branch is not `main`. |
-| `tag-prefix` | `string` | `"v"` | Prefix prepended to the SemVer number. Produces tags like `v1.2.3`. Treat as immutable once set — changing it causes release-please to lose track of prior versions. |
-| `config-file` | `string` | `".release-please-config.json"` | Path to the release-please config file in your repo root. |
+| `tag-prefix` | `string` | `"v"` | Prefix prepended to the SemVer number. Produces tags like `v1.2.3`. Treat as immutable once set — changing it causes semantic-release to lose track of prior versions. |
 
 ---
 
@@ -104,72 +76,79 @@ Available to calling workflows via `${{ needs.<job-id>.outputs.<name> }}`.
 
 > **Important**: GitHub Actions `workflow_call` callers control the `GITHUB_TOKEN`
 > permission scope. The reusable workflow cannot self-elevate. **You must declare
-> these permissions on the calling job** or you will get a `403` on tag push or
-> Release PR creation:
+> `contents: write` on the calling job** or you will get a `403` on tag push or
+> Release creation:
 
 ```yaml
 jobs:
   release:
     permissions:
       contents: write       # create/push tags and GitHub Releases
-      pull-requests: write  # release-please creates/updates the Release PR
     uses: jmckenzie17/homeschoolio-shared-actions/.github/workflows/semver-release.yml@v1
     secrets: inherit
 ```
 
+`pull-requests: write` is **not required** — semantic-release does not create a
+Release PR.
+
 ---
 
-## Required Consumer File
+## Custom Configuration (Advanced)
 
-Your repo must have a `.release-please-config.json` at the root. Minimum content:
+The workflow uses built-in inline defaults for standard single-package repos
+(`@semantic-release/commit-analyzer`, `@semantic-release/release-notes-generator`,
+`@semantic-release/github`). No config file is needed.
+
+For advanced configuration (custom changelog sections, non-standard bump strategies,
+monorepos), add `.releaserc.json` to your repo root — semantic-release discovers it
+automatically and it takes precedence over the inline defaults:
 
 ```json
 {
-  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
-  "release-type": "simple",
-  "packages": { ".": {} }
+  "branches": ["main"],
+  "plugins": [
+    ["@semantic-release/commit-analyzer", { "preset": "conventionalcommits" }],
+    ["@semantic-release/release-notes-generator", { "preset": "conventionalcommits" }],
+    ["@semantic-release/github"]
+  ]
 }
 ```
 
-See the [release-please docs](https://github.com/googleapis/release-please) for
-advanced configuration (monorepos, changelog sections, etc.).
+See the [semantic-release docs](https://semantic-release.gitbook.io/semantic-release/)
+for full configuration options.
 
 ---
 
-## Common Gotchas
+## Version Bump Rules
 
-**`release_created` vs `releases_created`**: There is a known bug in
-`release-please-action` v4 where the `releases_created` output (plural) always
-returns `true` regardless of whether a release was created. Always use
-`release_created` (singular) in your conditionals:
-
-```yaml
-# ✅ Correct
-if: needs.release.outputs.release-created == 'true'
-
-# ❌ Wrong — always true in v4, causes deploy to run on every push
-if: needs.release.outputs.releases-created == 'true'
-```
-
-Note: the workflow output is named `release-created` (hyphen) but internally uses
-the release-please step output `release_created` (underscore). Use the hyphenated
-form when referencing workflow outputs from a `needs` context.
+| Commit prefix | Bump type |
+|---------------|-----------|
+| `fix:`, `perf:` | PATCH |
+| `feat:` | MINOR |
+| `feat!:`, `BREAKING CHANGE:` footer | MAJOR |
+| `chore:`, `docs:`, `style:`, `test:`, `build:`, `ci:` | No release |
 
 ---
 
-## Versioning
+## Chaining a Deploy Job
 
-Pin consumers to a major tag for automatic patch/minor updates:
 ```yaml
-uses: jmckenzie17/homeschoolio-shared-actions/.github/workflows/semver-release.yml@v1
+jobs:
+  release:
+    permissions:
+      contents: write
+    uses: jmckenzie17/homeschoolio-shared-actions/.github/workflows/semver-release.yml@v1
+    secrets: inherit
+
+  deploy:
+    needs: release
+    if: needs.release.outputs.release-created == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Deploying ${{ needs.release.outputs.tag-name }}"
 ```
 
-Pin to an exact version for locked-down environments:
-```yaml
-uses: jmckenzie17/homeschoolio-shared-actions/.github/workflows/semver-release.yml@v1.2.3
-```
-
-See also: [examples/](examples/)
+See also: [examples/consumer-workflow-with-deploy.yml](examples/consumer-workflow-with-deploy.yml)
 
 ---
 
@@ -188,19 +167,21 @@ same commit as the version tag — in the same pipeline run, atomically.
 
 ---
 
+## Versioning
+
+Pin consumers to a major tag for automatic patch/minor updates:
+```yaml
+uses: jmckenzie17/homeschoolio-shared-actions/.github/workflows/semver-release.yml@v1
+```
+
+Pin to an exact version for locked-down environments:
+```yaml
+uses: jmckenzie17/homeschoolio-shared-actions/.github/workflows/semver-release.yml@v1.2.3
+```
+
+---
+
 ## Known Limitations
-
-**Commits ignored / no Release PR created (custom config path)**: If you are using
-a custom `config-file` input pointing to a path that doesn't exist, the workflow
-falls back to the built-in default — but if the path exists and contains invalid
-JSON, release-please will error. Verify your config file path and content if using
-a non-default location.
-
-**"GitHub Actions is not permitted to create or approve pull requests"**: This error
-means the repo-level Actions setting is not enabled. Go to Settings → Actions →
-General → Workflow permissions and check **"Allow GitHub Actions to create and
-approve pull requests"**. The `pull-requests: write` workflow permission alone is
-not sufficient.
 
 **Tag protection rulesets**: If your repo has GitHub Rulesets with tag name patterns
 matching `v*`, `GITHUB_TOKEN` (as `github-actions[bot]`) cannot bypass them to
@@ -218,3 +199,7 @@ jobs:
 Generate the token with
 [`actions/create-github-app-token`](https://github.com/actions/create-github-app-token)
 in a preceding job and pass it as `RELEASE_TOKEN`.
+
+**Inline config limitation**: The built-in inline plugin configuration does not
+support per-plugin options (e.g., custom changelog presets). Add `.releaserc.json`
+to your repo root for advanced configuration.

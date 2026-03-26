@@ -24,16 +24,7 @@ Each scenario maps to an acceptance criterion from the spec.
 
 ### Steps
 
-1. In `<consumer-repo>`, ensure `.release-please-config.json` exists:
-   ```json
-   {
-     "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
-     "release-type": "simple",
-     "packages": { ".": {} }
-   }
-   ```
-
-2. Ensure `<consumer-repo>` has a workflow file at `.github/workflows/release.yml`:
+1. In `<consumer-repo>`, add a workflow file at `.github/workflows/release.yml`:
    ```yaml
    name: Release
    on:
@@ -43,21 +34,16 @@ Each scenario maps to an acceptance criterion from the spec.
      release:
        permissions:
          contents: write
-         pull-requests: write
-       uses: homeschoolio/homeschoolio-shared-actions/.github/workflows/semver-release.yml@v1
+       uses: jmckenzie17/homeschoolio-shared-actions/.github/workflows/semver-release.yml@v1
        secrets: inherit
    ```
+   No config files required — the reusable workflow handles the default configuration.
 
-3. Make a commit with message `fix: correct typo in README` and push to a branch.
+2. Make a commit with message `fix: correct typo in README` and push to a branch.
 
-4. Open and merge a PR to `main`.
+3. Open and merge a PR to `main`.
 
-5. **Expected**: A "Release PR" is created/updated by release-please titled
-   something like `chore(main): release 1.0.1`.
-
-6. Merge the Release PR.
-
-7. **Verify**:
+4. **Verify** (semantic-release publishes directly — no Release PR):
    ```bash
    gh release list --repo <consumer-repo> --limit 5
    # Expected: v1.0.1 (or v1.0.0 if first release)
@@ -75,7 +61,6 @@ Each scenario maps to an acceptance criterion from the spec.
 
 1. Commit `feat: add new onboarding section` to a branch in `<consumer-repo>`.
 2. Open and merge PR to `main`.
-3. Merge the resulting Release PR.
 
 **Verify**:
 ```bash
@@ -96,7 +81,6 @@ gh release view v1.1.0 --repo <consumer-repo>
    BREAKING CHANGE: config.json keys renamed, existing configs must be updated
    ```
 2. Open and merge PR to `main`.
-3. Merge the resulting Release PR.
 
 **Verify**:
 ```bash
@@ -133,9 +117,8 @@ gh release list --repo <consumer-repo> --limit 1
 ### Steps
 
 1. Use a brand new `<consumer-repo>` with zero version tags.
-2. Add the consumer workflow and config files.
-3. Commit `feat: initial implementation` and push directly to `main`
-   (or merge a PR).
+2. Add the consumer workflow (no config files needed).
+3. Commit `feat: initial implementation` and merge to `main`.
 
 **Verify**:
 ```bash
@@ -149,21 +132,20 @@ gh api repos/<consumer-repo>/git/refs/tags/v1.0.0 --jq '.object.sha'
 
 ## Scenario 6: Consumer Adoption — Single `uses:` Line (US2, SC-001)
 
-**Goal**: Verify a consumer can adopt the workflow with fewer than 20 lines.
+**Goal**: Verify a consumer can adopt the workflow with fewer than 20 lines and zero config files.
 
 ### Steps
 
-1. Count the lines in the minimal consumer workflow file from Scenario 1.
+1. Count the lines in the minimal consumer workflow file:
    ```bash
    wc -l <consumer-repo>/.github/workflows/release.yml
    # Expected: < 20 lines
    ```
 
-2. Confirm no other files were required beyond:
-   - `.github/workflows/release.yml`
-   - `.release-please-config.json`
+2. Confirm no config files were required beyond:
+   - `.github/workflows/release.yml` (the only required file)
 
-**Pass criteria**: Adoption requires exactly 2 files; workflow file is under 20 lines.
+**Pass criteria**: Adoption requires exactly 1 file; workflow file is under 20 lines.
 
 ---
 
@@ -174,13 +156,7 @@ version tag.
 
 ### Steps
 
-1. After any release (e.g., Scenario 1 above), inspect the workflow run:
-   ```bash
-   gh run view --repo <consumer-repo> --log | grep -E "major.tag|v1"
-   # Expected: log shows major pointer update step ran and succeeded
-   ```
-
-2. Verify the pointer SHA matches the release tag SHA:
+1. After any release (e.g., Scenario 1 above), verify the pointer SHA matches the release tag SHA:
    ```bash
    SHA_RELEASE=$(gh api repos/<consumer-repo>/git/refs/tags/v1.0.1 --jq '.object.sha')
    SHA_POINTER=$(gh api repos/<consumer-repo>/git/refs/tags/v1 --jq '.object.sha')
@@ -233,14 +209,13 @@ grep -E "uses:.*@(v[0-9]+|main|master|latest)" \
 
 ## Scenario 10: Permissions Verification (FR-010)
 
-**Goal**: Verify no permissions broader than required are declared.
+**Goal**: Verify only `contents: write` is declared — `pull-requests: write` is not needed.
 
 ```bash
 grep -A5 "permissions:" .github/workflows/semver-release.yml
 # Expected output contains ONLY:
 #   contents: write
-#   pull-requests: write
-# No other permission scopes should appear.
+# pull-requests: write MUST NOT appear.
 ```
 
 ---
@@ -266,8 +241,9 @@ gh pr checks <PR-number>
 
 | Symptom | Likely cause | Fix |
 |---------|-------------|-----|
-| Release PR not created after merge | `release-please-config.json` missing or malformed | Add/fix the config file |
+| No release created after merge | Non-releasable commits only (`chore:`, `docs:`, etc.) | Expected behavior — use `fix:` or `feat:` to trigger a release |
 | `403 Resource not accessible` on tag push | Tag Ruleset blocking `github-actions[bot]` | Use GitHub App token — see README workaround |
-| Major pointer not updated | Release step didn't set `release-created` output | Check workflow logs; ensure using `release_created` not `releases_created` output |
+| Major pointer not updated | Release step output not set | Check workflow logs; ensure conditional uses `new_release_published == 'true'` |
+| semantic-release fails on first run | Shallow clone missing git tags | Ensure `fetch-depth: 0` in checkout step |
 | `v1` pointer triggers downstream workflows | Using PAT instead of GITHUB_TOKEN | Expected behavior for PAT; switch to GITHUB_TOKEN if loops occur |
 | actionlint errors in CI | YAML syntax issue in workflow | Fix the flagged lines; run `actionlint` locally to preview |
