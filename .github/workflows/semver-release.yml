@@ -11,82 +11,64 @@ on:
         description: "Prefix prepended to the SemVer number (e.g. 'v' produces 'v1.2.3')"
         type: string
         default: "v"
-      config-file:
-        description: "Relative path to the release-please config file in the consumer repo"
-        type: string
-        default: ".release-please-config.json"
     outputs:
       release-created:
-        description: "Whether a new release was published in this run ('true' or 'false')"
-        value: ${{ jobs.release-please.outputs.release-created }}
+        description: "Whether a new release was published in this run ('true' or 'false' string)"
+        value: ${{ jobs.release.outputs.release-created }}
       tag-name:
-        description: "The full version tag created (e.g. 'v1.2.3')"
-        value: ${{ jobs.release-please.outputs.tag-name }}
+        description: "The full version tag created (e.g. 'v1.2.3'); empty if no release"
+        value: ${{ jobs.release.outputs.tag-name }}
       major-tag:
-        description: "The major pointer tag updated (e.g. 'v1')"
-        value: ${{ jobs.release-please.outputs.major-tag }}
+        description: "The major pointer tag updated (e.g. 'v1'); empty if no release"
+        value: ${{ jobs.release.outputs.major-tag }}
 
 permissions:
   contents: write
-  pull-requests: write
 
 jobs:
-  release-please:
+  release:
     runs-on: ubuntu-latest
     outputs:
-      release-created: ${{ steps.release-please.outputs.release_created }}
-      tag-name: ${{ steps.release-please.outputs.tag_name }}
+      release-created: ${{ steps.semantic-release.outputs.new_release_published }}
+      tag-name: ${{ steps.semantic-release.outputs.new_release_git_tag }}
       major-tag: ${{ steps.update-major-pointer.outputs.major_tag }}
     steps:
-      # fetch-depth: 0 is required for git tag operations in the pointer update step
+      # fetch-depth: 0 required — semantic-release reads full git tag history
+      # to determine prior releases and calculate the next version correctly.
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           fetch-depth: 0
 
-      # Write a default release-please config so consumers need zero setup files.
-      # If the consumer repo already has a config at the configured path, use that
-      # instead — consumer config always wins.
-      - name: Resolve release-please config
-        id: config
-        env:
-          CONFIG_FILE: ${{ inputs.config-file }}
-        run: |
-          DEFAULT_CONFIG='.release-please-config-default.json'
-          cat > "${DEFAULT_CONFIG}" <<'EOF'
-          {
-            "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
-            "release-type": "simple",
-            "packages": { ".": {} }
-          }
-          EOF
-          if [ -f "${CONFIG_FILE}" ]; then
-            echo "config=${CONFIG_FILE}" >> "${GITHUB_OUTPUT}"
-          else
-            echo "config=${DEFAULT_CONFIG}" >> "${GITHUB_OUTPUT}"
-          fi
-
-      - name: Run release-please
-        id: release-please
-        uses: googleapis/release-please-action@16a9c90856f42705d54a6fda1823352bdc62cf38 # v4.4.0
+      - name: Run semantic-release
+        id: semantic-release
+        uses: cycjimmy/semantic-release-action@b12c8f6015dc215fe37bc154d4ad456dd3833c90 # v6.0.0
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          config-file: ${{ steps.config.outputs.config }}
-          target-branch: ${{ inputs.release-branch }}
-          tag-prefix: ${{ inputs.tag-prefix }}
+          semantic_version: 25
+          # These plugins are installed if no .releaserc.json is present.
+          # A .releaserc.json at the consumer repo root overrides this inline
+          # configuration automatically (semantic-release convention-based discovery).
+          extra_plugins: |
+            @semantic-release/commit-analyzer
+            @semantic-release/release-notes-generator
+            @semantic-release/github
+          branches: |
+            ['${{ inputs.release-branch }}']
+          tag_format: "${{ inputs.tag-prefix }}${version}"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # Use release_created (singular) — releases_created (plural) is a known v4
-      # bug that always returns 'true' regardless of whether a release was created.
+      # new_release_published is a string output — compare with == 'true', not == true.
       - name: Update major version pointer
         id: update-major-pointer
-        if: steps.release-please.outputs.release_created == 'true'
+        if: steps.semantic-release.outputs.new_release_published == 'true'
         env:
-          VERSION: ${{ steps.release-please.outputs.tag_name }}
+          TAG: ${{ steps.semantic-release.outputs.new_release_git_tag }}
         run: |
           # MAJOR is extracted from the full tag — each release only updates its
           # own major pointer. e.g. v2.0.0 → MAJOR=v2, leaving v1 untouched.
-          MAJOR=${VERSION%%.*}
+          MAJOR=${TAG%%.*}
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git tag -fa "${MAJOR}" -m "Update ${MAJOR} tag to ${VERSION}"
+          git tag -fa "${MAJOR}" -m "Update ${MAJOR} tag to ${TAG}"
           git push origin "${MAJOR}" --force
           echo "major_tag=${MAJOR}" >> "${GITHUB_OUTPUT}"

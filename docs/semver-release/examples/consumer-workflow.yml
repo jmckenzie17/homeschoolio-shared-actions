@@ -8,6 +8,5 @@ jobs:
   release:
     permissions:
       contents: write
-      pull-requests: write
     uses: jmckenzie17/homeschoolio-shared-actions/.github/workflows/semver-release.yml@v1
     secrets: inherit

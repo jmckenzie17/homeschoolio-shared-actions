@@ -1,70 +1,40 @@
 # Research: Semantic Versioning CI/CD Pipelines
 
 **Feature**: 001-semver-cicd-pipelines
-**Date**: 2026-03-26
+**Date**: 2026-03-26 (updated for semantic-release engine swap)
 
 ---
 
 ## Decision 1: Version Bump & Release Engine
 
-**Decision**: Use `googleapis/release-please-action` (the active maintained fork,
-NOT the archived `google-github-actions/release-please-action`) as the version
-calculation and release creation engine.
+**Decision**: Use `cycjimmy/semantic-release-action` (SHA: `b12c8f6015dc215fe37bc154d4ad456dd3833c90`, v6.0.0) as the version calculation and release creation engine.
 
 **Rationale**:
-- Natively supports the full Conventional Commits specification including `fix:` →
-  PATCH, `feat:` → MINOR, `feat!:` / `BREAKING CHANGE:` footer → MAJOR.
-- Non-release prefixes (`chore:`, `docs:`, `style:`, `test:`, `build:`, `ci:`)
-  accumulate without bumping a version — cleanly satisfying FR-007.
-- Creates both the Git tag and a GitHub Release with auto-generated release notes in
-  a single action run — satisfying FR-001, FR-002, FR-003.
-- Uses a "Release PR" model: on every push to `main`, it either creates or updates a
-  "Release PR" that aggregates all pending changes. Merging that PR creates the tag
-  and release. This gives teams a human review gate before publishing.
-- Works with `secrets.GITHUB_TOKEN` using `contents: write` and
-  `pull-requests: write` permissions — no PAT required for basic operation.
+- Natively supports the full Conventional Commits specification: `fix:` → PATCH, `feat:` → MINOR, `feat!:` / `BREAKING CHANGE:` footer → MAJOR.
+- Non-release prefixes (`chore:`, `docs:`, `style:`, `test:`, `build:`, `ci:`) accumulate without bumping — satisfying FR-007.
+- Publishes a Git tag and GitHub Release **directly** on push to `main` (no Release PR intermediary) — satisfies FR-001, FR-002, FR-003.
 - No prior version tags → defaults to `v1.0.0` on first release (FR-008).
-- Actively maintained (2,342 action stars, 6,622 underlying library stars as of
-  March 2026). No known CVEs specific to the action.
+- Requires only `contents: write` — no `pull-requests: write` needed (simpler permission model than release-please).
 
-**Pinnable SHA**: `16a9c90856f42705d54a6fda1823352bdc62cf38` (v4.4.0, released
-2025-10-23). This SHA MUST be used in all `uses:` references per Constitution
-Principle III.
+**Pinnable SHA**: `b12c8f6015dc215fe37bc154d4ad456dd3833c90` (v6.0.0, released 2025-11-17). This SHA MUST be used in all `uses:` references per Constitution Principle III.
+
+**Known limitation — CVE-2025-5889**: Low-severity transitive vulnerability in `brace-expansion` (CVSS 3.1). Present in v6 via semantic-release v25's dependency chain. Unfixable in the action itself. Accepted: low severity, transitive only, no direct exposure in CI context.
 
 **Alternatives considered**:
-- `semantic-release` (direct via `npx`) — 23,476 stars, most popular overall.
-  Rejected because it requires `.releaserc.json` configuration in every consuming
-  repo, adding boilerplate for consumers. The release-please model keeps all
-  configuration in `release-please-config.json` in the target repo, which is more
-  discoverable. Additionally, the Angular convention default (vs. Conventional
-  Commits) requires extra config to get `feat!:` and `BREAKING CHANGE:` footer
-  parsing.
-- `cycjimmy/semantic-release-action` (681 stars) — lower adoption, CVE-2025-5889
-  (low, transitive) present, rejected in favor of higher-adoption option.
-- `mathieudutour/github-tag-action` — maintenance stalled since March 2024, does
-  not create GitHub Releases natively. Rejected.
-
-**Known limitation**: The `releases_created` output in release-please-action v4 has
-a known bug (Issue #965) where it returns `true` regardless of whether a release was
-published. The correct output to use for conditionals is `release_created` (singular,
-not plural).
+- `googleapis/release-please-action` — previously used; rejected because it requires a "Release PR" model that adds latency and requires `pull-requests: write` permission plus a repo-level "Allow GitHub Actions to create PRs" setting. These were live failure points. semantic-release's direct-publish model is simpler.
+- `cycjimmy/semantic-release-action` was previously rejected (Decision 1 original) due to lower adoption (681 stars vs 2,342) and CVE-2025-5889. Re-evaluated at user direction; CVE is low severity/transitive and acceptable.
 
 ---
 
 ## Decision 2: Moving Major Version Pointer Mechanism
 
-**Decision**: Use a plain shell `run:` step with native `git tag -fa` and
-`git push origin vN --force` commands — no additional action dependency.
+**Decision**: Use a plain shell `run:` step with native `git tag -fa` and `git push origin vN --force` commands — no additional action dependency.
 
 **Rationale**:
-- Official GitHub guidance (`actions/toolkit/docs/action-versioning.md`) documents
-  this exact pattern as the standard for Actions repositories.
-- A `run:` step has no external supply-chain dependency (no SHA to pin, no upstream
-  to compromise).
-- `contents: write` permission is sufficient to create and force-push tag refs when
-  no tag protection rules/rulesets are in place.
-- Logic is simple (extract major from `vMAJOR.MINOR.PATCH`, force-push) — does not
-  warrant an external action (Constitution Principle IV: Minimal Surface Area).
+- Official GitHub guidance documents this as the standard pattern for Actions repositories.
+- A `run:` step has zero external supply-chain dependency.
+- `contents: write` permission is sufficient.
+- Logic is trivial — does not warrant an external action (Constitution Principle IV).
 
 **Required git configuration before tagging**:
 ```bash
@@ -72,64 +42,40 @@ git config user.name "github-actions[bot]"
 git config user.email "github-actions[bot]@users.noreply.github.com"
 ```
 
-**Tag extraction pattern**:
+**Tag extraction pattern** (semantic-release outputs `new_release_git_tag`, e.g., `v1.2.3`):
 ```bash
-VERSION=${GITHUB_REF#refs/tags/}   # "v1.2.3"
-MAJOR=${VERSION%%.*}               # "v1"
-git tag -fa "${MAJOR}" -m "Update ${MAJOR} tag to ${VERSION}"
+TAG=${{ steps.release.outputs.new_release_git_tag }}  # "v1.2.3"
+MAJOR=${TAG%%.*}                                        # "v1"
+git tag -fa "${MAJOR}" -m "Update ${MAJOR} tag to ${TAG}"
 git push origin "${MAJOR}" --force
 ```
 
-**Alternatives considered**:
-- `nowactions/update-majorver` action — wraps the same shell commands. Rejected
-  because adding an external action dependency for a 3-line shell script violates
-  Constitution Principle IV and Principle III (requires SHA vetting for minimal
-  gain).
-- `actions/github-script@ed597411...` (v8.0.0) — appropriate for REST API calls
-  but unnecessary overhead for a pure git ref operation. Rejected.
+**Known gotcha — tag protection rulesets**: If a repo has Rulesets matching `v*`, `GITHUB_TOKEN` cannot force-push the major pointer. Workaround: GitHub App token via `actions/create-github-app-token`. Documented in README.
 
-**Known gotcha — tag protection rulesets**: If a consuming repo has GitHub Rulesets
-with tag name patterns matching `v*`, `GITHUB_TOKEN` (as `github-actions[bot]`)
-cannot be added to the bypass list. Force-pushing the major pointer will fail with
-403. Workaround: use a GitHub App token via `actions/create-github-app-token`. This
-is documented in the workflow's README as a known limitation.
-
-**Known gotcha — force-push does NOT trigger downstream workflows**: A tag
-force-pushed via `GITHUB_TOKEN` will not trigger other workflows listening on
-`on: push: tags:`. This is intentional GitHub behavior to prevent loops.
+**Known gotcha — force-push does NOT trigger downstream workflows**: Intentional GitHub behavior to prevent loops.
 
 ---
 
 ## Decision 3: Reusable Workflow Structure (`workflow_call`)
 
-**Decision**: The semver release pipeline is delivered as a reusable workflow at
-`.github/workflows/semver-release.yml` with `on: workflow_call:` trigger. It is NOT
-a composite action.
+**Decision**: Delivered as a reusable workflow at `.github/workflows/semver-release.yml` with `on: workflow_call:` trigger. Not a composite action.
 
 **Rationale**:
-- `workflow_call` is the correct GitHub construct for sharing multi-job pipelines
-  across repos. Composite actions are suited for single-step logic, not full release
-  pipelines with multiple jobs.
-- Consumer repos reference it with a single `uses:` line (FR-004), e.g.:
-  ```yaml
-  uses: homeschoolio/homeschoolio-shared-actions/.github/workflows/semver-release.yml@v1
-  ```
-- Inputs exposed via `workflow_call.inputs` allow consumers to override release
-  branch and tag prefix (FR-005).
-- The reusable workflow is self-contained and ships with its own `permissions:`
-  block, so consumers do not need to declare permissions themselves.
+- `workflow_call` is the correct GitHub construct for sharing multi-job pipelines.
+- Consumer repos reference it with a single `uses:` line (FR-004).
 
 **Workflow inputs defined**:
 | Input | Type | Default | Description |
 |-------|------|---------|-------------|
 | `release-branch` | string | `main` | Branch to base releases on |
 | `tag-prefix` | string | `v` | Prefix for version tags |
-| `config-file` | string | `.release-please-config.json` | Path to release-please config |
+
+**Note**: `config-file` input from the release-please design is removed — semantic-release discovers `.releaserc.json` automatically by convention; no explicit path input is needed.
 
 **Workflow outputs defined**:
 | Output | Type | Description |
 |--------|------|-------------|
-| `release-created` | boolean | Whether a release was published this run |
+| `release-created` | string (`"true"`/`"false"`) | Whether a release was published this run |
 | `tag-name` | string | The full version tag created (e.g., `v1.2.3`) |
 | `major-tag` | string | The major pointer tag updated (e.g., `v1`) |
 
@@ -141,56 +87,40 @@ Per Constitution Principle III, all external actions MUST be pinned to commit SH
 
 | Action | Purpose | Pinned SHA | Version |
 |--------|---------|-----------|---------|
-| `googleapis/release-please-action` | Version calc + tag + release | `16a9c90856f42705d54a6fda1823352bdc62cf38` | v4.4.0 |
-| `actions/checkout` | Repo checkout for pointer update step | `34e114876b0b11c390a56381ad16ebd13914f8d5` | v4.3.1 |
+| `cycjimmy/semantic-release-action` | Version calc + tag + release | `b12c8f6015dc215fe37bc154d4ad456dd3833c90` | v6.0.0 |
+| `actions/checkout` | Repo checkout | `34e114876b0b11c390a56381ad16ebd13914f8d5` | v4.3.1 |
 | `rhysd/actionlint` | Workflow YAML lint in CI test | `393031adb9afb225ee52ae2ccd7a5af5525e03e8` | v1.7.11 |
 
-**Output key names for `release-please-action` v4.4.0** (confirmed from action source):
-- `release_created` (singular) — `true` if root-component release was created; use this for single-repo conditionals
-- `releases_created` (plural) — aggregate flag for manifest/monorepo mode only; do NOT use for single-repo
-- `tag_name` — the created tag (e.g., `v1.2.3`)
-- `major` — the major version number (e.g., `1`)
+**Output key names for `cycjimmy/semantic-release-action` v6.0.0**:
+- `new_release_published` — `"true"` if a release was created; use this for conditionals
+- `new_release_version` — version without prefix, e.g., `1.2.3`
+- `new_release_git_tag` — full tag with prefix, e.g., `v1.2.3`
+- `new_release_major_version` — major version number only, e.g., `1`
 
 ---
 
 ## Decision 5: CI Test Workflow
 
-**Decision**: A test workflow at `.github/workflows/test-semver-release.yml` runs
-on every PR to `main` and validates the reusable workflow structure using a dry-run
-or lint check.
+**Decision**: A test workflow at `.github/workflows/test-semver-release.yml` runs on every PR to `main` with:
+1. **Lint/validate**: `actionlint` to verify the workflow YAML is syntactically valid.
+2. **Dry-run**: `semantic-release --dry-run` to verify commit parsing and version calculation without creating tags.
+3. **SHA-pin check**: `grep` to assert no mutable `@tag` references remain.
 
-**Rationale**: Constitution Principle V requires every action/reusable workflow to
-have an automated test covering the happy path and at least one error path before
-release. Since the release workflow can't be fully end-to-end tested without an
-actual merge (it would create real tags), the test strategy is:
-
-1. **Lint/validate**: Use `actionlint` to verify the workflow YAML is syntactically
-   valid and free of common mistakes.
-2. **Dry-run**: Pass `--dry-run` flag to release-please to verify it can parse
-   commits and calculate a version without creating tags.
-3. **Input validation**: Test that invalid inputs (e.g., unsupported `tag-prefix`)
-   fail with a clear error message.
-
-`actionlint` is available as a GitHub Action:
-`rhysd/actionlint` — verify SHA at implementation time.
+**Note**: `semantic-release --dry-run` requires `GITHUB_TOKEN` to authenticate with GitHub API even in dry-run mode.
 
 ---
 
 ## Decision 6: Permissions Model
 
-**Critical finding**: In `workflow_call`, the `GITHUB_TOKEN` scope is controlled by
-the **caller**, not the called workflow. A `permissions:` block inside the reusable
-workflow can only downgrade what the caller grants — it cannot elevate. Therefore,
-the caller (`release.yml`) MUST declare the required permissions explicitly.
+**Critical finding**: semantic-release does NOT create a Release PR. It publishes directly. Therefore:
 
-The reusable workflow still declares permissions (for documentation and least-privilege
-scoping), but the caller must mirror them:
+- `pull-requests: write` is **not required** (simplification over release-please).
+- Only `contents: write` is needed: create/push tags, create GitHub Releases.
 
-**In `semver-release.yml`** (reusable — documents and potentially narrows):
+**In `semver-release.yml`** (reusable — documents and narrows):
 ```yaml
 permissions:
-  contents: write      # create/push tags, create releases, update manifest
-  pull-requests: write # release-please creates/updates the Release PR
+  contents: write
 ```
 
 **In `release.yml`** (self-release caller — grants the ceiling):
@@ -199,91 +129,43 @@ jobs:
   release:
     permissions:
       contents: write
-      pull-requests: write
     uses: ./.github/workflows/semver-release.yml
 ```
 
-Consumer workflow files calling via external reference (`@v1`) must also declare
-these permissions on the calling job, or the workflow will fail with a 403.
-
-This corrects FR-010: the permission requirement applies to **both** the reusable
-workflow and any caller. The README MUST document this for consumer adoption.
+Consumer workflows calling via `@v1` must also declare `contents: write` on the calling job.
 
 ---
 
 ## Decision 7: Self-Release Caller Workflow & Concurrency
 
-**Decision**: This repo versions itself via `.github/workflows/release.yml`, a
-minimal caller workflow that references `semver-release.yml` via local path.
+**Decision**: This repo versions itself via `.github/workflows/release.yml`, a minimal caller workflow referencing `semver-release.yml` via local path.
 
-**Local path reference behavior**: `uses: ./.github/workflows/semver-release.yml`
-resolves the called workflow from the same commit as the caller. This is not
-self-referential (different files), so no recursion limit applies. Supported since
-January 2022.
-
-**Concurrency behavior**: `cancel-in-progress: false` implements a **"last pending
-wins"** model, not a true FIFO queue:
-- One running job + one pending slot exist per concurrency group.
-- If a third trigger fires while running+pending exist, the pending run is **replaced**
-  by the newest trigger. The middle run is dropped.
-- For the semver use case this is acceptable: release-please is idempotent and will
-  calculate the correct version from all merged commits when it eventually runs. The
-  dropped pending run will be superseded by the newest trigger which carries all
-  accumulated commits.
-
-**Concurrency configuration** for `release.yml`:
-```yaml
-concurrency:
-  group: release
-  cancel-in-progress: false
-```
-
-Using a fixed group name (not `${{ github.workflow }}-${{ github.ref }}`) is correct
-here because releases only ever run on `main` pushes — no branch scoping needed.
+**Concurrency**: `group: release`, `cancel-in-progress: false` — last-pending-wins. Acceptable: semantic-release is idempotent.
 
 ---
 
-## Decision 8: Built-in Default Config with Consumer Override (FR-014)
+## Decision 8: Zero-Config Adoption via Inline Plugin Config (FR-014)
 
-**Decision**: The reusable workflow writes a default `.release-please-config.json`
-to a temp path in a `run:` step before invoking the action. If the consumer repo
-has a config file at the path specified by `inputs.config-file`, that file is used
-instead. The action is invoked with `config-file:` pointing to whichever config
-was resolved — with no `release-type:` in the `with:` block.
+**Decision**: The reusable workflow configures semantic-release plugins inline via the `extra_plugins` and `branches` inputs of `cycjimmy/semantic-release-action`. No `.releaserc.json` is required for standard single-package repos.
 
-**Rationale**:
-- `release-type` inline mode and `config-file` mode are **mutually exclusive** in
-  release-please-action v4: when `release-type` is set, the config file is
-  completely ignored (never read). To support both a default and an override, the
-  workflow must use file-based mode exclusively.
-- Writing the default to a temp file (`.release-please-config-default.json`) keeps
-  it out of the consumer's repo state and avoids conflicts with any consumer-managed
-  config file.
-- The `[ -f "${CONFIG_FILE}" ]` check gives consumer files unconditional precedence.
-
-**Implementation**:
-```bash
-DEFAULT_CONFIG='.release-please-config-default.json'
-cat > "${DEFAULT_CONFIG}" <<'EOF'
-{
-  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
-  "release-type": "simple",
-  "packages": { ".": {} }
-}
-EOF
-if [ -f "${CONFIG_FILE}" ]; then
-  echo "config=${CONFIG_FILE}" >> "${GITHUB_OUTPUT}"
-else
-  echo "config=${DEFAULT_CONFIG}" >> "${GITHUB_OUTPUT}"
-fi
+**Inline config**:
+```yaml
+- uses: cycjimmy/semantic-release-action@b12c8f6015dc215fe37bc154d4ad456dd3833c90
+  with:
+    semantic_version: 25
+    extra_plugins: |
+      @semantic-release/commit-analyzer
+      @semantic-release/release-notes-generator
+      @semantic-release/github
+    branches: |
+      ['${{ inputs.release-branch }}']
+    tag_format: '${{ inputs.tag-prefix }}${version}'
+  env:
+    GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 ```
 
-The action then receives `config-file: ${{ steps.config.outputs.config }}`.
+**Consumer override**: If a `.releaserc.json` exists at the repo root, semantic-release picks it up automatically and the inline `with:` configuration is overridden. No explicit `config-file` input is needed — this is semantic-release's standard convention-based discovery.
 
-**Consumer impact**: Zero-config adoption is now possible. A consumer needs only
-the caller workflow file and one repo setting (allow Actions to create PRs).
-Advanced consumers can still commit their own `.release-please-config.json`.
+**Limitation**: Inline `extra_plugins` installs plugins but does not support per-plugin options (e.g., custom changelog sections, non-standard preset). Consumers who need advanced configuration must commit a `.releaserc.json`. This is documented in the README.
 
-**Prerequisite gap resolved**: The earlier failure (release-please silently ignoring
-commits because no config file existed) is eliminated — the built-in default handles
-the standard case without any consumer action.
+**`fetch-depth: 0` required**: semantic-release reads git tags to determine prior releases. Shallow clones (default `fetch-depth: 1`) may cause incorrect version detection. `fetch-depth: 0` MUST be set on the checkout step.

@@ -38,19 +38,13 @@ single-package repo targeting `main` needs zero configuration.
 |-------|------|----------|---------|-------------|
 | `release-branch` | `string` | no | `"main"` | The branch name that triggers a release evaluation when a push occurs. Consumer repos using a non-`main` default branch (e.g., `master`) MUST set this. |
 | `tag-prefix` | `string` | no | `"v"` | Prefix prepended to the SemVer number. Produces tags like `v1.2.3`. Must be a non-empty string. |
-| `config-file` | `string` | no | `".release-please-config.json"` | Relative path to an optional release-please configuration file in the consumer repo root. If this file does not exist, the workflow's built-in default config is used automatically. |
 
 ### Input Validation Rules
 
 - `release-branch`: MUST be a valid Git branch name. Empty string is not accepted.
 - `tag-prefix`: MUST be a non-empty string. Changing this value in an existing repo
-  will cause release-please to treat the repo as having no prior releases (existing
+  will cause semantic-release to treat the repo as having no prior releases (existing
   tags with the old prefix are not found). Treat as immutable once set.
-- `config-file`: If the file exists at the specified path, it MUST be valid JSON
-  conforming to the release-please config schema — an invalid JSON file will cause
-  the action to fail. If the file does not exist, the workflow silently falls back
-  to the built-in default (`release-type: simple`, root package). Consumers do not
-  need to create this file for standard single-package repos.
 
 ---
 
@@ -93,16 +87,18 @@ self-elevate. **Calling workflows MUST declare these permissions on the calling 
 jobs:
   release:
     permissions:
-      contents: write       # create/push tags, create GitHub Releases, update manifest
-      pull-requests: write  # create/update the release-please Release PR
+      contents: write       # create/push tags, create GitHub Releases
     uses: owner/homeschoolio-shared-actions/.github/workflows/semver-release.yml@v1
     secrets: inherit
 ```
 
-The reusable workflow also declares these same permissions internally (to document
-requirements and narrow scope if the caller grants more). Without the caller
-declaring these permissions, the workflow will fail with a 403 on tag push or
-Release PR creation.
+The reusable workflow also declares `permissions: contents: write` internally (to
+document requirements and narrow scope if the caller grants more). Without the
+caller declaring this permission, the workflow will fail with a 403 on tag push or
+Release creation.
+
+**Note**: `pull-requests: write` is NOT required — semantic-release publishes
+directly without creating a Release PR.
 
 For repos with Rulesets that block `github-actions[bot]` from creating tags, a
 GitHub App token must be passed via secrets — see the README for the workaround
@@ -128,18 +124,16 @@ For advanced cases (protected branches, Rulesets), an override token may be pass
 
 ### When a release IS created
 
-1. The Release PR (managed by release-please) is merged to `release-branch`.
-2. A new Version Tag (`{tag-prefix}{MAJOR}.{MINOR}.{PATCH}`) is pushed to that
-   commit.
+1. A push to `release-branch` containing at least one releasable commit triggers semantic-release.
+2. A new Version Tag (`{tag-prefix}{MAJOR}.{MINOR}.{PATCH}`) is pushed to that commit.
 3. A GitHub Release is published with an auto-generated changelog body.
-4. The Major Pointer Tag (`{tag-prefix}{MAJOR}`) is force-updated to the same
-   commit.
+4. The Major Pointer Tag (`{tag-prefix}{MAJOR}`) is force-updated to the same commit.
 5. Outputs: `release-created=true`, `tag-name=v1.2.3`, `major-tag=v1`.
 
 ### When NO release is created
 
 1. Only non-release commits exist since the last tag (e.g., `chore:`, `docs:`).
-2. No tag is created. No GitHub Release is published. The manifest is not updated.
+2. No tag is created. No GitHub Release is published.
 3. Outputs: `release-created=false`, `tag-name=""`, `major-tag=""`.
 
 ### Version bump rules
@@ -168,10 +162,9 @@ Any of the following changes to this contract require a MAJOR version bump of th
 repo and a deprecation notice in the release notes:
 
 - Removing or renaming an input.
-- Changing the default value of an input in a way that alters behavior for existing
-  consumers.
+- Changing the default value of an input in a way that alters behavior for existing consumers.
 - Removing or renaming an output.
-- Changing the type of an output (e.g., boolean string `"true"` → actual boolean).
+- Changing the type of an output.
 - Changing the required permissions to a broader set.
 
 The following changes are backward-compatible (MINOR or PATCH):
@@ -191,5 +184,6 @@ The test workflow validates this contract on every PR to `main`:
 |------|--------|---------------|
 | Workflow YAML is valid | `actionlint` | Zero errors or warnings |
 | Inputs are correctly typed | `actionlint` | No type mismatches |
-| Dry-run produces expected version | `release-please --dry-run` | Exit 0, no tags pushed |
+| Dry-run produces expected version | `semantic-release --dry-run` | Exit 0, no tags pushed |
 | No-release case exits cleanly | Commits with `chore:` only | `release-created == 'false'` |
+| No mutable tag references | `grep` for `@v*`/`@main` patterns | Zero matches |
