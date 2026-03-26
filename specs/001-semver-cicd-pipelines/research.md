@@ -142,10 +142,14 @@ Per Constitution Principle III, all external actions MUST be pinned to commit SH
 | Action | Purpose | Pinned SHA | Version |
 |--------|---------|-----------|---------|
 | `googleapis/release-please-action` | Version calc + tag + release | `16a9c90856f42705d54a6fda1823352bdc62cf38` | v4.4.0 |
-| `actions/checkout` | Repo checkout for pointer update step | Verify current SHA at implementation time | v4.x |
+| `actions/checkout` | Repo checkout for pointer update step | `34e114876b0b11c390a56381ad16ebd13914f8d5` | v4.3.1 |
+| `rhysd/actionlint` | Workflow YAML lint in CI test | `393031adb9afb225ee52ae2ccd7a5af5525e03e8` | v1.7.11 |
 
-`actions/checkout` SHA must be verified at implementation time from
-`https://github.com/actions/checkout/releases` to get the latest v4 patch.
+**Output key names for `release-please-action` v4.4.0** (confirmed from action source):
+- `release_created` (singular) — `true` if root-component release was created; use this for single-repo conditionals
+- `releases_created` (plural) — aggregate flag for manifest/monorepo mode only; do NOT use for single-repo
+- `tag_name` — the created tag (e.g., `v1.2.3`)
+- `major` — the major version number (e.g., `1`)
 
 ---
 
@@ -174,14 +178,65 @@ actual merge (it would create real tags), the test strategy is:
 
 ## Decision 6: Permissions Model
 
-The reusable workflow declares the minimum permissions required (FR-010):
+**Critical finding**: In `workflow_call`, the `GITHUB_TOKEN` scope is controlled by
+the **caller**, not the called workflow. A `permissions:` block inside the reusable
+workflow can only downgrade what the caller grants — it cannot elevate. Therefore,
+the caller (`release.yml`) MUST declare the required permissions explicitly.
 
+The reusable workflow still declares permissions (for documentation and least-privilege
+scoping), but the caller must mirror them:
+
+**In `semver-release.yml`** (reusable — documents and potentially narrows):
 ```yaml
 permissions:
-  contents: write      # create/push tags, create releases
+  contents: write      # create/push tags, create releases, update manifest
   pull-requests: write # release-please creates/updates the Release PR
 ```
 
-No other permissions are needed. `contents: write` covers tag creation, tag
-force-push (for major pointer), and GitHub Release creation. `pull-requests: write`
-is required by release-please to create and update its Release PR.
+**In `release.yml`** (self-release caller — grants the ceiling):
+```yaml
+jobs:
+  release:
+    permissions:
+      contents: write
+      pull-requests: write
+    uses: ./.github/workflows/semver-release.yml
+```
+
+Consumer workflow files calling via external reference (`@v1`) must also declare
+these permissions on the calling job, or the workflow will fail with a 403.
+
+This corrects FR-010: the permission requirement applies to **both** the reusable
+workflow and any caller. The README MUST document this for consumer adoption.
+
+---
+
+## Decision 7: Self-Release Caller Workflow & Concurrency
+
+**Decision**: This repo versions itself via `.github/workflows/release.yml`, a
+minimal caller workflow that references `semver-release.yml` via local path.
+
+**Local path reference behavior**: `uses: ./.github/workflows/semver-release.yml`
+resolves the called workflow from the same commit as the caller. This is not
+self-referential (different files), so no recursion limit applies. Supported since
+January 2022.
+
+**Concurrency behavior**: `cancel-in-progress: false` implements a **"last pending
+wins"** model, not a true FIFO queue:
+- One running job + one pending slot exist per concurrency group.
+- If a third trigger fires while running+pending exist, the pending run is **replaced**
+  by the newest trigger. The middle run is dropped.
+- For the semver use case this is acceptable: release-please is idempotent and will
+  calculate the correct version from all merged commits when it eventually runs. The
+  dropped pending run will be superseded by the newest trigger which carries all
+  accumulated commits.
+
+**Concurrency configuration** for `release.yml`:
+```yaml
+concurrency:
+  group: release
+  cancel-in-progress: false
+```
+
+Using a fixed group name (not `${{ github.workflow }}-${{ github.ref }}`) is correct
+here because releases only ever run on `main` pushes — no branch scoping needed.

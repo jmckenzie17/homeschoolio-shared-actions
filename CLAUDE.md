@@ -3,6 +3,7 @@
 Auto-generated from all feature plans. Last updated: 2026-03-26
 
 ## Active Technologies
+- N/A (Git tags and GitHub Releases are the persistent artifacts) (001-semver-cicd-pipelines)
 
 - YAML (GitHub Actions workflow syntax) — no application runtime + `googleapis/release-please-action@16a9c90856f42705d54a6fda1823352bdc62cf38` (v4.4.0), `actions/checkout` (v4, SHA pinned at implementation) (001-semver-cicd-pipelines)
 
@@ -12,6 +13,7 @@ Auto-generated from all feature plans. Last updated: 2026-03-26
 .github/
 └── workflows/
     ├── semver-release.yml          # Reusable workflow (workflow_call) — primary deliverable
+    ├── release.yml                 # Self-release caller (this repo versions itself via local path)
     └── test-semver-release.yml     # CI test workflow (runs on every PR to main)
 
 docs/
@@ -32,6 +34,7 @@ docs/
 YAML (GitHub Actions workflow syntax) — no application runtime: Follow standard conventions
 
 ## Recent Changes
+- 001-semver-cicd-pipelines: Added YAML (GitHub Actions workflow syntax) — no application runtime
 
 - 001-semver-cicd-pipelines: Added YAML (GitHub Actions workflow syntax) — no application runtime + `googleapis/release-please-action@16a9c90856f42705d54a6fda1823352bdc62cf38` (v4.4.0), `actions/checkout` (v4, SHA pinned at implementation)
 

@@ -5,6 +5,16 @@
 **Status**: Draft
 **Input**: User description: "implement ci cd pipelines that use semantic versioning. the templates used for semantic versioning should also be available to other repos to use."
 
+## Clarifications
+
+### Session 2026-03-26
+
+- Q: Does this repo (`homeschoolio-shared-actions`) use the semver workflow to version itself? → A: Yes.
+- Q: How does this repo reference its own reusable workflow to avoid a bootstrap chicken-and-egg problem? → A: Option B — a local caller workflow (`.github/workflows/release.yml`) references the reusable workflow via local path `uses: ./.github/workflows/semver-release.yml`, requiring no prior published release.
+- Q: How should concurrent pipeline runs (two PRs merged in rapid succession) be handled? → A: Option C — enforce serialization via a `concurrency` group on `release.yml` with `cancel-in-progress: false` (queue, not cancel).
+- Q: Should the reusable workflow accept an optional PAT token input, or rely solely on `GITHUB_TOKEN`? → A: Option A — `GITHUB_TOKEN` with `contents: write` only; no PAT input; consumers must not have tag protection rules that block force-push on pointer tags.
+- Q: How are release pipeline failures surfaced to operators/consumers? → A: Option A — rely on GitHub's built-in failure email/notification system; no custom alerting step in the workflow.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Automated Release Versioning on Merge (Priority: P1)
@@ -91,10 +101,37 @@ that the `v1` tag now points to the same commit as `v1.0.1`.
 
 ---
 
+### User Story 4 - This Repo Versions Itself (Priority: P1)
+
+When a PR is merged to `main` in `homeschoolio-shared-actions`, the repo's own
+release pipeline runs automatically and creates the correct SemVer tag and GitHub
+Release — using the reusable workflow defined in this same repo via a local path
+reference, with no prior published version required.
+
+**Why this priority**: The repo must eat its own cooking. Consumers reference this
+repo by version tag; if this repo doesn't self-version, there are no tags to
+reference.
+
+**Independent Test**: Merge a conventional-commit PR to `main` in this repo; verify
+that `.github/workflows/release.yml` triggers, calls `semver-release.yml` via local
+path, and produces a new version tag and GitHub Release.
+
+**Acceptance Scenarios**:
+
+1. **Given** a PR with a `feat:` commit is merged to `main` in this repo, **When**
+   the `release.yml` caller workflow runs, **Then** a MINOR version tag and GitHub
+   Release are created via the local reusable workflow.
+2. **Given** no prior version tag exists in this repo, **When** the first
+   `release.yml` run completes, **Then** versioning starts at `v1.0.0` with no
+   manual bootstrap step required.
+
+---
+
 ### Edge Cases
 
-- What happens when two PRs are merged in rapid succession — does the second release
-  pick up the tag created by the first, or could there be a race condition?
+- **Concurrent merges**: Two PRs merged in rapid succession are serialized by a
+  `concurrency` group (`cancel-in-progress: false`) on `release.yml`; runs queue
+  rather than overlap, so each gets a release attempt in order.
 - How does the pipeline behave if the most recent commit message does not follow
   conventional commit format (no recognizable prefix)?
 - What happens if a human manually creates a version tag out-of-sequence — does the
@@ -126,8 +163,23 @@ that the `v1` tag now points to the same commit as `v1.0.1`.
   tags, starting at `v1.0.0`.
 - **FR-009**: All third-party actions used within the workflow MUST be pinned to
   specific commit SHAs (not mutable tags).
-- **FR-010**: The workflow MUST require only the `contents: write` permission and
-  no broader permissions.
+- **FR-010**: The reusable workflow MUST declare `contents: write` and
+  `pull-requests: write` permissions and no broader scopes. The self-release caller
+  workflow (`release.yml`) and consumer workflows MUST also declare these same
+  permissions on the calling job (GitHub Actions `workflow_call` callers control the
+  `GITHUB_TOKEN` scope ceiling; the reusable workflow cannot self-elevate).
+  Authentication MUST use `GITHUB_TOKEN` exclusively; no PAT input is accepted or
+  required.
+- **FR-012**: The self-release caller workflow (`release.yml`) MUST declare a
+  `concurrency` group (`group: release`, `cancel-in-progress: false`) to serialize
+  runs. Note: this implements "last pending wins" — at most one run executes and one
+  is pending at a time; a third trigger replaces the pending run. This is acceptable
+  because release-please is idempotent and calculates the correct version from all
+  accumulated commits when it runs.
+- **FR-011**: This repo MUST version itself using the reusable workflow via a local
+  caller workflow (`.github/workflows/release.yml`) that references it with
+  `uses: ./.github/workflows/semver-release.yml` (local path), avoiding any
+  dependency on a prior published release of this repo.
 
 ### Key Entities
 
@@ -141,6 +193,10 @@ that the `v1` tag now points to the same commit as `v1.0.1`.
   auto-generated notes describing changes since the previous release.
 - **Consumer Workflow**: A minimal workflow file in a consuming repo that references
   this repo's reusable workflow via `uses:`.
+- **Self-Release Caller Workflow**: `.github/workflows/release.yml` in this repo;
+  triggers on `push` to `main` and calls the reusable workflow via local path
+  (`uses: ./.github/workflows/semver-release.yml`) so this repo versions itself
+  without requiring a prior published release.
 
 ## Success Criteria *(mandatory)*
 
@@ -170,3 +226,8 @@ that the `v1` tag now points to the same commit as `v1.0.1`.
   separate concerns for future actions in this repo.
 - Repositories that consume this workflow already have at least one commit on `main`
   before the first pipeline run.
+- Consumer repositories do not enforce tag protection rules that would block
+  `GITHUB_TOKEN` from force-pushing the major pointer tag (e.g., `v1`).
+- Release pipeline failure visibility relies on GitHub's built-in notification
+  system (email to commit author and repo watchers); no custom alerting is
+  implemented within the workflow.

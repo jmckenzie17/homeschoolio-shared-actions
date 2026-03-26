@@ -1,14 +1,20 @@
 name: Release and Deploy
+
 on:
   push:
     branches: [main]
+
 jobs:
   release:
-    uses: homeschoolio/homeschoolio-shared-actions/.github/workflows/semver-release.yml@v1
+    permissions:
+      contents: write
+      pull-requests: write
+    uses: jmckenzie17/homeschoolio-shared-actions/.github/workflows/semver-release.yml@v1
     secrets: inherit
 
   deploy:
     needs: release
+    # release-created is a string output — use == 'true', not == true
     if: needs.release.outputs.release-created == 'true'
     runs-on: ubuntu-latest
     steps:
