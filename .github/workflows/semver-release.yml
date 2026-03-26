@@ -1,0 +1,64 @@
+name: Semver Release
+
+on:
+  workflow_call:
+    inputs:
+      release-branch:
+        description: "Branch name that triggers a release evaluation on push"
+        type: string
+        default: "main"
+      tag-prefix:
+        description: "Prefix prepended to the SemVer number (e.g. 'v' produces 'v1.2.3')"
+        type: string
+        default: "v"
+      config-file:
+        description: "Relative path to the release-please config file in the consumer repo"
+        type: string
+        default: ".release-please-config.json"
+    outputs:
+      release-created:
+        description: "Whether a new release was published in this run ('true' or 'false')"
+        value: ${{ jobs.release-please.outputs.release-created }}
+      tag-name:
+        description: "The full version tag created (e.g. 'v1.2.3')"
+        value: ${{ jobs.release-please.outputs.tag-name }}
+      major-tag:
+        description: "The major pointer tag updated (e.g. 'v1')"
+        value: ${{ jobs.release-please.outputs.major-tag }}
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    outputs:
+      release-created: ${{ steps.release-please.outputs.release_created }}
+      tag-name: ${{ steps.release-please.outputs.tag_name }}
+      major-tag: ${{ steps.update-major-pointer.outputs.major_tag }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Run release-please
+        id: release-please
+        uses: googleapis/release-please-action@16a9c90856f42705d54a6fda1823352bdc62cf38 # v4.4.0
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          release-type: simple
+          config-file: ${{ inputs.config-file }}
+          target-branch: ${{ inputs.release-branch }}
+          tag-prefix: ${{ inputs.tag-prefix }}
+
+      - name: Update major version pointer
+        id: update-major-pointer
+        if: steps.release-please.outputs.release_created == 'true'
+        env:
+          VERSION: ${{ steps.release-please.outputs.tag_name }}
+        run: |
+          MAJOR=${VERSION%%.*}
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -fa "${MAJOR}" -m "Update ${MAJOR} tag to ${VERSION}"
+          git push origin "${MAJOR}" --force
+          echo "major_tag=${MAJOR}" >> "${GITHUB_OUTPUT}"

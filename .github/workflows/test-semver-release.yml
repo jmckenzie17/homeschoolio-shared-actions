@@ -1,0 +1,42 @@
+name: Test semver-release workflow
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Lint workflow with actionlint
+        uses: rhysd/actionlint@393031adb9afb225ee52ae2ccd7a5af5525e03e8 # v1.7.11
+        with:
+          files: .github/workflows/semver-release.yml
+
+  dry-run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Verify release-please can parse repo
+        run: |
+          npx --yes release-please release-pr \
+            --dry-run \
+            --repo-url=${{ github.repository }} \
+            --token=${{ secrets.GITHUB_TOKEN }} \
+            --release-type=simple
+
+  sha-pinning:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Verify no mutable tag references in semver-release.yml
+        run: |
+          if grep -E "uses:.*@(v[0-9]+|main|master|latest)$" .github/workflows/semver-release.yml; then
+            echo "ERROR: Mutable tag references found. All actions must be pinned to a commit SHA."
+            exit 1
+          fi
+          echo "OK: All action references are SHA-pinned."
