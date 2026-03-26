@@ -14,6 +14,7 @@
 - Q: How should concurrent pipeline runs (two PRs merged in rapid succession) be handled? → A: Option C — enforce serialization via a `concurrency` group on `release.yml` with `cancel-in-progress: false` (queue, not cancel).
 - Q: Should the reusable workflow accept an optional PAT token input, or rely solely on `GITHUB_TOKEN`? → A: Option A — `GITHUB_TOKEN` with `contents: write` only; no PAT input; consumers must not have tag protection rules that block force-push on pointer tags.
 - Q: How are release pipeline failures surfaced to operators/consumers? → A: Option A — rely on GitHub's built-in failure email/notification system; no custom alerting step in the workflow.
+- Observed failure: release-please failed with "GitHub Actions is not permitted to create or approve pull requests." → Root cause: repo-level Actions setting must have "Allow GitHub Actions to create and approve pull requests" enabled (Settings → Actions → General). This is required in addition to declaring `pull-requests: write` in the workflow. Consumer repos must enable this setting before the first run.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -129,6 +130,12 @@ path, and produces a new version tag and GitHub Release.
 
 ### Edge Cases
 
+- **Repo Actions setting not enabled**: If "Allow GitHub Actions to create and
+  approve pull requests" is disabled in repo Settings → Actions → General,
+  release-please will fail with "GitHub Actions is not permitted to create or
+  approve pull requests." The `pull-requests: write` workflow permission is
+  necessary but not sufficient — the repo-level setting must also be enabled.
+  This must be documented as a prerequisite in the consumer README.
 - **Concurrent merges**: Two PRs merged in rapid succession are serialized by a
   `concurrency` group (`cancel-in-progress: false`) on `release.yml`; runs queue
   rather than overlap, so each gets a release attempt in order.
@@ -176,6 +183,10 @@ path, and produces a new version tag and GitHub Release.
   is pending at a time; a third trigger replaces the pending run. This is acceptable
   because release-please is idempotent and calculates the correct version from all
   accumulated commits when it runs.
+- **FR-013**: The consumer-facing README MUST document "Allow GitHub Actions to
+  create and approve pull requests" (Settings → Actions → General) as a required
+  one-time repo setup step, separate from the `pull-requests: write` permission
+  declaration in the workflow file.
 - **FR-011**: This repo MUST version itself using the reusable workflow via a local
   caller workflow (`.github/workflows/release.yml`) that references it with
   `uses: ./.github/workflows/semver-release.yml` (local path), avoiding any
@@ -228,6 +239,11 @@ path, and produces a new version tag and GitHub Release.
   before the first pipeline run.
 - Consumer repositories do not enforce tag protection rules that would block
   `GITHUB_TOKEN` from force-pushing the major pointer tag (e.g., `v1`).
+- Consumer repositories (and this repo itself) MUST have "Allow GitHub Actions to
+  create and approve pull requests" enabled in Settings → Actions → General before
+  the first pipeline run. This is required for release-please to create its Release
+  PR; declaring `pull-requests: write` in the workflow is necessary but not
+  sufficient without this repo-level setting.
 - Release pipeline failure visibility relies on GitHub's built-in notification
   system (email to commit author and repo watchers); no custom alerting is
   implemented within the workflow.

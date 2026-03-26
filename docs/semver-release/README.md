@@ -7,6 +7,21 @@ updates the moving major version pointer (e.g. `v1`).
 
 ---
 
+## Prerequisites
+
+Before the workflow can run, enable one repo setting in your consumer repo:
+
+**Settings → Actions → General → Workflow permissions**
+→ Check **"Allow GitHub Actions to create and approve pull requests"**
+
+> Without this, release-please will fail with:
+> `GitHub Actions is not permitted to create or approve pull requests.`
+>
+> Note: declaring `pull-requests: write` in your workflow is necessary but **not
+> sufficient** — this repo-level setting must also be enabled.
+
+---
+
 ## Quick Start
 
 Create two files in your consumer repo:
@@ -152,6 +167,12 @@ same commit as the version tag — in the same pipeline run, atomically.
 ---
 
 ## Known Limitations
+
+**"GitHub Actions is not permitted to create or approve pull requests"**: This error
+means the repo-level Actions setting is not enabled. Go to Settings → Actions →
+General → Workflow permissions and check **"Allow GitHub Actions to create and
+approve pull requests"**. The `pull-requests: write` workflow permission alone is
+not sufficient.
 
 **Tag protection rulesets**: If your repo has GitHub Rulesets with tag name patterns
 matching `v*`, `GITHUB_TOKEN` (as `github-actions[bot]`) cannot bypass them to
