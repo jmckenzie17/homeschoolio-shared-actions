@@ -109,13 +109,17 @@ CHANGELOG section for all commits since the previous Version Tag.
 
 ## Entity 5: Release Please Configuration (`release-please-config.json`)
 
-A JSON file that lives in each consuming repository (not in this shared-actions
-repo) and tells release-please how to behave in that repo.
+**Optional** — a JSON file in a consuming repository that overrides the built-in
+default configuration provided by the reusable workflow.
 
 **Location in consumer repo**: `.release-please-config.json` (default; overridable
-via `config-file` input)
+via `config-file` input). If absent, the workflow's built-in default is used.
 
-**Minimum required content**:
+**When to provide**: Only needed for advanced configuration (monorepos, custom
+changelog sections, non-standard bump strategies). Standard single-package repos
+do not need this file.
+
+**Example override content**:
 ```json
 {
   "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
@@ -126,8 +130,25 @@ via `config-file` input)
 }
 ```
 
-**Relationships**: One config file per consumer repo. Referenced by the reusable
-workflow's `config-file` input.
+**Relationships**: Zero or one config file per consumer repo. If present, takes
+precedence over the built-in default written by the "Resolve release-please config"
+step in the reusable workflow.
+
+---
+
+## Entity 5a: Built-in Default Config (temp file, runtime only)
+
+A temporary JSON file written to `.release-please-config-default.json` at the start
+of each workflow run by the "Resolve release-please config" step. Used when no
+consumer config file exists at the `config-file` input path.
+
+**Content**: `release-type: simple`, root package (`"."`) — handles all standard
+single-package repos without consumer setup.
+
+**Lifecycle**: Written at the start of each job run; not committed to any repo;
+discarded when the runner terminates.
+
+**Precedence**: Consumer config file (Entity 5) always overrides this default.
 
 ---
 
@@ -145,8 +166,9 @@ the current version for each package. Should not be manually edited.
 }
 ```
 
-**Lifecycle**: Created on first release. Updated on every subsequent release.
-Committed to `main` as part of the Release PR merge.
+**Lifecycle**: Created automatically on first release by release-please. Updated on
+every subsequent release. Committed to `main` as part of the Release PR merge.
+Consumers do not need to create this file manually.
 
 ---
 

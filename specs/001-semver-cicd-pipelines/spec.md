@@ -15,6 +15,8 @@
 - Q: Should the reusable workflow accept an optional PAT token input, or rely solely on `GITHUB_TOKEN`? → A: Option A — `GITHUB_TOKEN` with `contents: write` only; no PAT input; consumers must not have tag protection rules that block force-push on pointer tags.
 - Q: How are release pipeline failures surfaced to operators/consumers? → A: Option A — rely on GitHub's built-in failure email/notification system; no custom alerting step in the workflow.
 - Observed failure: release-please failed with "GitHub Actions is not permitted to create or approve pull requests." → Root cause: repo-level Actions setting must have "Allow GitHub Actions to create and approve pull requests" enabled (Settings → Actions → General). This is required in addition to declaring `pull-requests: write` in the workflow. Consumer repos must enable this setting before the first run.
+- Observed failure: release-please not picking up conventional commit messages → Root cause: `.release-please-config.json` and `.release-please-manifest.json` were missing from the repo root. The config file is required for release-please to know the release type and package layout; the manifest seeds the starting version. Both files must exist in the repo before the first pipeline run.
+- Q: Can the reusable workflow embed default release-please config inline so consumers don't need to create a config file, while still allowing override via a config file if the consumer chooses? → A: Yes — the reusable workflow writes a default `.release-please-config.json` to a temp path, then checks if the consumer repo has its own config at the path specified by the `config-file` input; if found, the consumer's file is used instead. This makes zero-config adoption possible while preserving full consumer control.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -130,6 +132,12 @@ path, and produces a new version tag and GitHub Release.
 
 ### Edge Cases
 
+- **Missing `.release-please-config.json`**: If this file is absent from the repo
+  root, release-please will not parse any commits and will produce no Release PR
+  and no version bump, silently succeeding with no output. Both
+  `.release-please-config.json` (release type + package layout) and
+  `.release-please-manifest.json` (current version seed) must be committed to the
+  repo root before the first pipeline run.
 - **Repo Actions setting not enabled**: If "Allow GitHub Actions to create and
   approve pull requests" is disabled in repo Settings → Actions → General,
   release-please will fail with "GitHub Actions is not permitted to create or
@@ -161,6 +169,13 @@ path, and produces a new version tag and GitHub Release.
   other repositories can reference it with a single `uses:` line.
 - **FR-005**: The workflow MUST expose documented inputs allowing consumers to
   override defaults such as release branch name and tag prefix.
+- **FR-014**: The reusable workflow MUST provide a built-in default
+  release-please configuration (equivalent to `release-type: simple`, root package)
+  so that consumer repos require zero additional config files to get started. If
+  the consumer repo has a config file at the path specified by the `config-file`
+  input, that file MUST take precedence over the built-in default. This is
+  implemented by writing a default config to a temp path, then substituting the
+  consumer's file if it exists.
 - **FR-006**: The workflow MUST update the major version pointer tag (e.g., `v1`)
   after every PATCH or MINOR release on that major line.
 - **FR-007**: The workflow MUST skip version creation (no tag, no release) when all
@@ -241,7 +256,12 @@ path, and produces a new version tag and GitHub Release.
   `GITHUB_TOKEN` from force-pushing the major pointer tag (e.g., `v1`).
 - Consumer repositories (and this repo itself) MUST have "Allow GitHub Actions to
   create and approve pull requests" enabled in Settings → Actions → General before
-  the first pipeline run. This is required for release-please to create its Release
+  the first pipeline run.
+- Consumer repositories do NOT need to provide a `.release-please-config.json` file;
+  the reusable workflow provides a built-in default. Consumers MAY provide their own
+  config file at the path specified by the `config-file` input to override the
+  default. The `.release-please-manifest.json` is created and managed automatically
+  by release-please after the first run; no manual creation is required. This is required for release-please to create its Release
   PR; declaring `pull-requests: write` in the workflow is necessary but not
   sufficient without this repo-level setting.
 - Release pipeline failure visibility relies on GitHub's built-in notification

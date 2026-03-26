@@ -38,7 +38,7 @@ single-package repo targeting `main` needs zero configuration.
 |-------|------|----------|---------|-------------|
 | `release-branch` | `string` | no | `"main"` | The branch name that triggers a release evaluation when a push occurs. Consumer repos using a non-`main` default branch (e.g., `master`) MUST set this. |
 | `tag-prefix` | `string` | no | `"v"` | Prefix prepended to the SemVer number. Produces tags like `v1.2.3`. Must be a non-empty string. |
-| `config-file` | `string` | no | `".release-please-config.json"` | Relative path to the release-please configuration file in the consumer repo root. |
+| `config-file` | `string` | no | `".release-please-config.json"` | Relative path to an optional release-please configuration file in the consumer repo root. If this file does not exist, the workflow's built-in default config is used automatically. |
 
 ### Input Validation Rules
 
@@ -46,8 +46,11 @@ single-package repo targeting `main` needs zero configuration.
 - `tag-prefix`: MUST be a non-empty string. Changing this value in an existing repo
   will cause release-please to treat the repo as having no prior releases (existing
   tags with the old prefix are not found). Treat as immutable once set.
-- `config-file`: MUST point to a valid JSON file at that path in the consumer repo.
-  If the file does not exist, release-please will fail with an error.
+- `config-file`: If the file exists at the specified path, it MUST be valid JSON
+  conforming to the release-please config schema — an invalid JSON file will cause
+  the action to fail. If the file does not exist, the workflow silently falls back
+  to the built-in default (`release-type: simple`, root package). Consumers do not
+  need to create this file for standard single-package repos.
 
 ---
 

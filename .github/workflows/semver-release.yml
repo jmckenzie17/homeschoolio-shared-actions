@@ -43,13 +43,34 @@ jobs:
         with:
           fetch-depth: 0
 
+      # Write a default release-please config so consumers need zero setup files.
+      # If the consumer repo already has a config at the configured path, use that
+      # instead — consumer config always wins.
+      - name: Resolve release-please config
+        id: config
+        env:
+          CONFIG_FILE: ${{ inputs.config-file }}
+        run: |
+          DEFAULT_CONFIG='.release-please-config-default.json'
+          cat > "${DEFAULT_CONFIG}" <<'EOF'
+          {
+            "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+            "release-type": "simple",
+            "packages": { ".": {} }
+          }
+          EOF
+          if [ -f "${CONFIG_FILE}" ]; then
+            echo "config=${CONFIG_FILE}" >> "${GITHUB_OUTPUT}"
+          else
+            echo "config=${DEFAULT_CONFIG}" >> "${GITHUB_OUTPUT}"
+          fi
+
       - name: Run release-please
         id: release-please
         uses: googleapis/release-please-action@16a9c90856f42705d54a6fda1823352bdc62cf38 # v4.4.0
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          release-type: simple
-          config-file: ${{ inputs.config-file }}
+          config-file: ${{ steps.config.outputs.config }}
           target-branch: ${{ inputs.release-branch }}
           tag-prefix: ${{ inputs.tag-prefix }}
 
