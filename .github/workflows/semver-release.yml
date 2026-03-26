@@ -39,21 +39,43 @@ jobs:
         with:
           fetch-depth: 0
 
+      # Write a default .releaserc.json that excludes @semantic-release/npm
+      # (the default plugin set includes npm, which requires package.json).
+      # If the consumer repo already has a .releaserc.json, that file takes
+      # precedence — semantic-release discovers it automatically by convention.
+      - name: Resolve semantic-release config
+        id: config
+        env:
+          RELEASE_BRANCH: ${{ inputs.release-branch }}
+          TAG_PREFIX: ${{ inputs.tag-prefix }}
+        run: |
+          DEFAULT_CONFIG='.releaserc-default.json'
+          if [ -f ".releaserc.json" ] || [ -f ".releaserc.js" ] || [ -f ".releaserc.cjs" ] || [ -f "release.config.js" ] || [ -f "release.config.cjs" ]; then
+            echo "Consumer config found — using it instead of built-in default."
+          else
+            cat > "${DEFAULT_CONFIG}" <<EOF
+          {
+            "branches": ["${RELEASE_BRANCH}"],
+            "tagFormat": "${TAG_PREFIX}\${version}",
+            "plugins": [
+              "@semantic-release/commit-analyzer",
+              "@semantic-release/release-notes-generator",
+              "@semantic-release/github"
+            ]
+          }
+          EOF
+            echo "No consumer config found — wrote built-in default to ${DEFAULT_CONFIG}."
+          fi
+
       - name: Run semantic-release
         id: semantic-release
         uses: cycjimmy/semantic-release-action@b12c8f6015dc215fe37bc154d4ad456dd3833c90 # v6.0.0
         with:
           semantic_version: 25
-          # These plugins are installed if no .releaserc.json is present.
-          # A .releaserc.json at the consumer repo root overrides this inline
-          # configuration automatically (semantic-release convention-based discovery).
           extra_plugins: |
             @semantic-release/commit-analyzer
             @semantic-release/release-notes-generator
             @semantic-release/github
-          branches: |
-            ['${{ inputs.release-branch }}']
-          tag_format: "${{ inputs.tag-prefix }}${version}"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

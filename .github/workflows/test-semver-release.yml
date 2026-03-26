@@ -22,9 +22,23 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Write default semantic-release config (mirrors reusable workflow default)
+        run: |
+          cat > .releaserc-default.json <<'EOF'
+          {
+            "branches": ["main"],
+            "tagFormat": "v${version}",
+            "plugins": [
+              "@semantic-release/commit-analyzer",
+              "@semantic-release/release-notes-generator",
+              "@semantic-release/github"
+            ]
+          }
+          EOF
+
       - name: Verify semantic-release can parse commits (dry run)
         run: |
-          npx --yes semantic-release --dry-run --no-ci
+          npx --yes semantic-release --dry-run --no-ci --extends ./.releaserc-default.json
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

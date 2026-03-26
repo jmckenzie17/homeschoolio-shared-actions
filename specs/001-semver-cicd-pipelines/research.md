@@ -166,6 +166,8 @@ Consumer workflows calling via `@v1` must also declare `contents: write` on the 
 
 **Consumer override**: If a `.releaserc.json` exists at the repo root, semantic-release picks it up automatically and the inline `with:` configuration is overridden. No explicit `config-file` input is needed — this is semantic-release's standard convention-based discovery.
 
-**Limitation**: Inline `extra_plugins` installs plugins but does not support per-plugin options (e.g., custom changelog sections, non-standard preset). Consumers who need advanced configuration must commit a `.releaserc.json`. This is documented in the README.
+**Critical finding**: `extra_plugins` only *installs* additional plugins — it does NOT replace semantic-release's default plugin set, which includes `@semantic-release/npm`. On non-Node.js repos with no `package.json`, this causes a hard failure: `SemanticReleaseError: Missing package.json file`. The fix: write a `.releaserc-default.json` at runtime in a `run:` step before the action executes, specifying only the three desired plugins. Semantic-release discovers this file automatically. Consumer repos with their own `.releaserc.json` (or `.releaserc.js`, `release.config.js`, etc.) take precedence automatically — the default file is only written when no consumer config exists.
+
+**Limitation**: The built-in default does not support per-plugin options (e.g., custom changelog presets). Consumers who need advanced configuration must commit their own `.releaserc.json`.
 
 **`fetch-depth: 0` required**: semantic-release reads git tags to determine prior releases. Shallow clones (default `fetch-depth: 1`) may cause incorrect version detection. `fetch-depth: 0` MUST be set on the checkout step.
