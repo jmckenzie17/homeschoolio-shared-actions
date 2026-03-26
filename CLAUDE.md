@@ -9,13 +9,23 @@ Auto-generated from all feature plans. Last updated: 2026-03-26
 ## Project Structure
 
 ```text
-src/
-tests/
+.github/
+└── workflows/
+    ├── semver-release.yml          # Reusable workflow (workflow_call) — primary deliverable
+    └── test-semver-release.yml     # CI test workflow (runs on every PR to main)
+
+docs/
+└── semver-release/
+    ├── README.md                   # Consumer-facing docs
+    └── examples/
+        ├── consumer-workflow.yml
+        └── consumer-workflow-with-deploy.yml
 ```
 
 ## Commands
 
-# Add commands for YAML (GitHub Actions workflow syntax) — no application runtime
+# No build/test commands — YAML-only project. Use actionlint for local linting:
+# brew install actionlint && actionlint .github/workflows/semver-release.yml
 
 ## Code Style
 

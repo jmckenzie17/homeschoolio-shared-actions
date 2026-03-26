@@ -1,0 +1,20 @@
+name: Release and Deploy
+on:
+  push:
+    branches: [main]
+jobs:
+  release:
+    uses: homeschoolio/homeschoolio-shared-actions/.github/workflows/semver-release.yml@v1
+    secrets: inherit
+
+  deploy:
+    needs: release
+    if: needs.release.outputs.release-created == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Deploy
+        run: |
+          echo "Deploying version ${{ needs.release.outputs.tag-name }}"
+          # Add your deploy steps here
