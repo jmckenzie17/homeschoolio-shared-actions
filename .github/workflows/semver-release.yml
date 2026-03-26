@@ -49,7 +49,7 @@ jobs:
           RELEASE_BRANCH: ${{ inputs.release-branch }}
           TAG_PREFIX: ${{ inputs.tag-prefix }}
         run: |
-          DEFAULT_CONFIG='.releaserc-default.json'
+          DEFAULT_CONFIG='.releaserc.json'
           if [ -f ".releaserc.json" ] || [ -f ".releaserc.js" ] || [ -f ".releaserc.cjs" ] || [ -f "release.config.js" ] || [ -f "release.config.cjs" ]; then
             echo "Consumer config found — using it instead of built-in default."
           else
