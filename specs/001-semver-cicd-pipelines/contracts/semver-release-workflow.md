@@ -82,19 +82,28 @@ jobs:
 
 ## Required Permissions
 
-The reusable workflow declares its own permissions. Calling workflows do NOT need to
-declare these; they are inherited by the called workflow automatically.
+**Important**: In `workflow_call`, the `GITHUB_TOKEN` scope is controlled by the
+**caller**. The reusable workflow can only narrow what it receives — it cannot
+self-elevate. **Calling workflows MUST declare these permissions on the calling job:**
 
 ```yaml
-permissions:
-  contents: write       # create/push tags, create GitHub Releases, update manifest
-  pull-requests: write  # create/update the release-please Release PR
+jobs:
+  release:
+    permissions:
+      contents: write       # create/push tags, create GitHub Releases, update manifest
+      pull-requests: write  # create/update the release-please Release PR
+    uses: owner/homeschoolio-shared-actions/.github/workflows/semver-release.yml@v1
+    secrets: inherit
 ```
 
-If the consumer repo has branch protection rules requiring the `GITHUB_TOKEN` to be
-a specific actor, `secrets: inherit` is sufficient. For repos with Rulesets that
-block `github-actions[bot]` from creating tags, a GitHub App token must be passed
-via secrets — see the README for the workaround pattern.
+The reusable workflow also declares these same permissions internally (to document
+requirements and narrow scope if the caller grants more). Without the caller
+declaring these permissions, the workflow will fail with a 403 on tag push or
+Release PR creation.
+
+For repos with Rulesets that block `github-actions[bot]` from creating tags, a
+GitHub App token must be passed via secrets — see the README for the workaround
+pattern.
 
 ---
 

@@ -165,24 +165,58 @@ on:
 
 jobs:
   release:
+    permissions:
+      contents: write
+      pull-requests: write
     uses: homeschoolio/homeschoolio-shared-actions/.github/workflows/semver-release.yml@v1
     secrets: inherit
 ```
+
+Note: `permissions` must be declared on the calling job — the reusable workflow
+cannot self-elevate its `GITHUB_TOKEN` scope.
 
 **Relationships**: Lives in the consumer repo. References the Reusable Workflow
 (Entity 1) by path and tag.
 
 ---
 
+## Entity 8: Self-Release Caller Workflow (`release.yml`)
+
+The workflow in this repo that versions `homeschoolio-shared-actions` itself using
+the reusable workflow via local path reference.
+
+**Location**: `.github/workflows/release.yml`
+
+**Trigger**: `on: push: branches: [main]`
+
+**Concurrency**: `group: release`, `cancel-in-progress: false` (serializes runs;
+last-pending-wins if more than two runs overlap)
+
+**Key properties**:
+- References the reusable workflow via local path: `uses: ./.github/workflows/semver-release.yml`
+- No bootstrap dependency — local path resolves from the same commit, so no prior
+  published version of this repo is required for the first release.
+- Declares `permissions: contents: write` + `pull-requests: write` on the calling
+  job (required — callers control the `GITHUB_TOKEN` ceiling).
+
+**Relationships**: Lives in this repo. Calls the Reusable Workflow (Entity 1) by
+local path. Produces the same Version Tag, Major Pointer Tag, and GitHub Release
+artifacts as any consumer workflow.
+
+---
+
 ## Entity Relationship Summary
 
 ```text
-Consumer Repo
-├── Consumer Workflow File ──uses──▶ Reusable Workflow (semver-release.yml)
-├── release-please-config.json       │
-└── .release-please-manifest.json ◀──┤ (reads/updates)
-                                     │
-                                     ├──creates──▶ Version Tag (v1.2.3)
-                                     ├──creates──▶ GitHub Release
-                                     └──updates──▶ Major Pointer Tag (v1)
+homeschoolio-shared-actions (this repo)
+└── Self-Release Caller (release.yml) ──local uses──▶ Reusable Workflow (semver-release.yml)
+                                                       │
+Consumer Repo                                          │
+├── Consumer Workflow File ──────────external uses────▶│
+├── release-please-config.json                         │ (reads/updates)
+└── .release-please-manifest.json ◀────────────────────┤
+                                                       │
+                                                       ├──creates──▶ Version Tag (v1.2.3)
+                                                       ├──creates──▶ GitHub Release
+                                                       └──updates──▶ Major Pointer Tag (v1)
 ```

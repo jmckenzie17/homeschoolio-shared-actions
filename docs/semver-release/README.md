@@ -14,12 +14,17 @@ Create two files in your consumer repo:
 **`.github/workflows/release.yml`**:
 ```yaml
 name: Release
+
 on:
   push:
     branches: [main]
+
 jobs:
   release:
-    uses: homeschoolio/homeschoolio-shared-actions/.github/workflows/semver-release.yml@v1
+    permissions:
+      contents: write
+      pull-requests: write
+    uses: jmckenzie17/homeschoolio-shared-actions/.github/workflows/semver-release.yml@v1
     secrets: inherit
 ```
 
@@ -58,6 +63,25 @@ Available to calling workflows via `${{ needs.<job-id>.outputs.<name> }}`.
 
 ---
 
+## Required Permissions
+
+> **Important**: GitHub Actions `workflow_call` callers control the `GITHUB_TOKEN`
+> permission scope. The reusable workflow cannot self-elevate. **You must declare
+> these permissions on the calling job** or you will get a `403` on tag push or
+> Release PR creation:
+
+```yaml
+jobs:
+  release:
+    permissions:
+      contents: write       # create/push tags and GitHub Releases
+      pull-requests: write  # release-please creates/updates the Release PR
+    uses: jmckenzie17/homeschoolio-shared-actions/.github/workflows/semver-release.yml@v1
+    secrets: inherit
+```
+
+---
+
 ## Required Consumer File
 
 Your repo must have a `.release-please-config.json` at the root. Minimum content:
@@ -75,16 +99,37 @@ advanced configuration (monorepos, changelog sections, etc.).
 
 ---
 
+## Common Gotchas
+
+**`release_created` vs `releases_created`**: There is a known bug in
+`release-please-action` v4 where the `releases_created` output (plural) always
+returns `true` regardless of whether a release was created. Always use
+`release_created` (singular) in your conditionals:
+
+```yaml
+# ✅ Correct
+if: needs.release.outputs.release-created == 'true'
+
+# ❌ Wrong — always true in v4, causes deploy to run on every push
+if: needs.release.outputs.releases-created == 'true'
+```
+
+Note: the workflow output is named `release-created` (hyphen) but internally uses
+the release-please step output `release_created` (underscore). Use the hyphenated
+form when referencing workflow outputs from a `needs` context.
+
+---
+
 ## Versioning
 
 Pin consumers to a major tag for automatic patch/minor updates:
 ```yaml
-uses: homeschoolio/homeschoolio-shared-actions/.github/workflows/semver-release.yml@v1
+uses: jmckenzie17/homeschoolio-shared-actions/.github/workflows/semver-release.yml@v1
 ```
 
 Pin to an exact version for locked-down environments:
 ```yaml
-uses: homeschoolio/homeschoolio-shared-actions/.github/workflows/semver-release.yml@v1.2.3
+uses: jmckenzie17/homeschoolio-shared-actions/.github/workflows/semver-release.yml@v1.2.3
 ```
 
 See also: [examples/](examples/)
@@ -116,7 +161,7 @@ force-push the major pointer. You'll see a `403` error.
 ```yaml
 jobs:
   release:
-    uses: homeschoolio/homeschoolio-shared-actions/.github/workflows/semver-release.yml@v1
+    uses: jmckenzie17/homeschoolio-shared-actions/.github/workflows/semver-release.yml@v1
     secrets:
       RELEASE_TOKEN: ${{ secrets.MY_GITHUB_APP_TOKEN }}
 ```

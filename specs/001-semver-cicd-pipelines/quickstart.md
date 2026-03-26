@@ -41,6 +41,9 @@ Each scenario maps to an acceptance criterion from the spec.
        branches: [main]
    jobs:
      release:
+       permissions:
+         contents: write
+         pull-requests: write
        uses: homeschoolio/homeschoolio-shared-actions/.github/workflows/semver-release.yml@v1
        secrets: inherit
    ```
@@ -186,7 +189,37 @@ version tag.
 
 ---
 
-## Scenario 8: SHA Pinning Verification (Constitution Principle III)
+## Scenario 8: Self-Versioning — This Repo Versions Itself (US4, FR-011)
+
+**Goal**: Verify that merging to `main` in this repo triggers `release.yml` via
+local path and produces the correct version tag.
+
+### Steps
+
+1. Merge a PR with a conventional commit to `main` in `homeschoolio-shared-actions`.
+
+2. **Verify**:
+   ```bash
+   gh run list --repo jmckenzie17/homeschoolio-shared-actions \
+     --workflow release.yml --limit 3
+   # Expected: most recent run is "completed / success"
+
+   gh release list --repo jmckenzie17/homeschoolio-shared-actions --limit 1
+   # Expected: new version tag (e.g., v1.0.0 on first run)
+   ```
+
+3. Confirm the local path reference was used (not an external tag reference):
+   ```bash
+   grep "uses:" .github/workflows/release.yml
+   # Expected: uses: ./.github/workflows/semver-release.yml  (no @tag suffix)
+   ```
+
+**Pass criteria**: Release created without any manually published version of this
+repo having been required first.
+
+---
+
+## Scenario 9: SHA Pinning Verification (Constitution Principle III)
 
 **Goal**: Verify no mutable tag references exist in the workflow file.
 
@@ -198,7 +231,7 @@ grep -E "uses:.*@(v[0-9]+|main|master|latest)" \
 
 ---
 
-## Scenario 9: Permissions Verification (FR-010)
+## Scenario 10: Permissions Verification (FR-010)
 
 **Goal**: Verify no permissions broader than required are declared.
 
@@ -212,7 +245,7 @@ grep -A5 "permissions:" .github/workflows/semver-release.yml
 
 ---
 
-## Scenario 10: CI Test Workflow Passes on PR (Constitution Principle V)
+## Scenario 11: CI Test Workflow Passes on PR (Constitution Principle V)
 
 **Goal**: Verify the test workflow runs and passes on every PR to `main` in this repo.
 

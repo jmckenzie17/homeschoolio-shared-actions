@@ -38,7 +38,10 @@ jobs:
       tag-name: ${{ steps.release-please.outputs.tag_name }}
       major-tag: ${{ steps.update-major-pointer.outputs.major_tag }}
     steps:
+      # fetch-depth: 0 is required for git tag operations in the pointer update step
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 0
 
       - name: Run release-please
         id: release-please
@@ -50,12 +53,16 @@ jobs:
           target-branch: ${{ inputs.release-branch }}
           tag-prefix: ${{ inputs.tag-prefix }}
 
+      # Use release_created (singular) — releases_created (plural) is a known v4
+      # bug that always returns 'true' regardless of whether a release was created.
       - name: Update major version pointer
         id: update-major-pointer
         if: steps.release-please.outputs.release_created == 'true'
         env:
           VERSION: ${{ steps.release-please.outputs.tag_name }}
         run: |
+          # MAJOR is extracted from the full tag — each release only updates its
+          # own major pointer. e.g. v2.0.0 → MAJOR=v2, leaving v1 untouched.
           MAJOR=${VERSION%%.*}
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"

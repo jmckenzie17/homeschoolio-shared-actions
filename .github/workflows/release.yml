@@ -1,0 +1,19 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+# last-pending-wins — release-please is idempotent over accumulated commits,
+# so a dropped pending run will be superseded by the next trigger which carries
+# all commits since the last tag.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    permissions:
+      contents: write
+      pull-requests: write
+    uses: ./.github/workflows/semver-release.yml

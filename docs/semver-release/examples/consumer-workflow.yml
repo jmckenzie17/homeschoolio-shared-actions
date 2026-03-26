@@ -1,8 +1,13 @@
 name: Release
+
 on:
   push:
     branches: [main]
+
 jobs:
   release:
-    uses: homeschoolio/homeschoolio-shared-actions/.github/workflows/semver-release.yml@v1
+    permissions:
+      contents: write
+      pull-requests: write
+    uses: jmckenzie17/homeschoolio-shared-actions/.github/workflows/semver-release.yml@v1
     secrets: inherit
