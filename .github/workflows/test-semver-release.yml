@@ -24,7 +24,7 @@ jobs:
         run: |
           npx --yes release-please release-pr \
             --dry-run \
-            --repo-url=homeschoolio/homeschoolio-shared-actions \
+            --repo-url=${{ github.repository }} \
             --token=${{ secrets.GITHUB_TOKEN }} \
             --release-type=simple
 
