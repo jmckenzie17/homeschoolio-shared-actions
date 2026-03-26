@@ -240,3 +240,50 @@ concurrency:
 
 Using a fixed group name (not `${{ github.workflow }}-${{ github.ref }}`) is correct
 here because releases only ever run on `main` pushes — no branch scoping needed.
+
+---
+
+## Decision 8: Built-in Default Config with Consumer Override (FR-014)
+
+**Decision**: The reusable workflow writes a default `.release-please-config.json`
+to a temp path in a `run:` step before invoking the action. If the consumer repo
+has a config file at the path specified by `inputs.config-file`, that file is used
+instead. The action is invoked with `config-file:` pointing to whichever config
+was resolved — with no `release-type:` in the `with:` block.
+
+**Rationale**:
+- `release-type` inline mode and `config-file` mode are **mutually exclusive** in
+  release-please-action v4: when `release-type` is set, the config file is
+  completely ignored (never read). To support both a default and an override, the
+  workflow must use file-based mode exclusively.
+- Writing the default to a temp file (`.release-please-config-default.json`) keeps
+  it out of the consumer's repo state and avoids conflicts with any consumer-managed
+  config file.
+- The `[ -f "${CONFIG_FILE}" ]` check gives consumer files unconditional precedence.
+
+**Implementation**:
+```bash
+DEFAULT_CONFIG='.release-please-config-default.json'
+cat > "${DEFAULT_CONFIG}" <<'EOF'
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "release-type": "simple",
+  "packages": { ".": {} }
+}
+EOF
+if [ -f "${CONFIG_FILE}" ]; then
+  echo "config=${CONFIG_FILE}" >> "${GITHUB_OUTPUT}"
+else
+  echo "config=${DEFAULT_CONFIG}" >> "${GITHUB_OUTPUT}"
+fi
+```
+
+The action then receives `config-file: ${{ steps.config.outputs.config }}`.
+
+**Consumer impact**: Zero-config adoption is now possible. A consumer needs only
+the caller workflow file and one repo setting (allow Actions to create PRs).
+Advanced consumers can still commit their own `.release-please-config.json`.
+
+**Prerequisite gap resolved**: The earlier failure (release-please silently ignoring
+commits because no config file existed) is eliminated — the built-in default handles
+the standard case without any consumer action.

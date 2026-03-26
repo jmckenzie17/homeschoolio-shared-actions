@@ -35,6 +35,7 @@ YAML (GitHub Actions workflow syntax) — no application runtime: Follow standar
 
 ## Recent Changes
 - 001-semver-cicd-pipelines: Added YAML (GitHub Actions workflow syntax) — no application runtime
+- 001-semver-cicd-pipelines: Added YAML (GitHub Actions workflow syntax) — no application runtime
 
 - 001-semver-cicd-pipelines: Added YAML (GitHub Actions workflow syntax) — no application runtime + `googleapis/release-please-action@16a9c90856f42705d54a6fda1823352bdc62cf38` (v4.4.0), `actions/checkout` (v4, SHA pinned at implementation)
 

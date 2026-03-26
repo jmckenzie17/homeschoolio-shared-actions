@@ -9,7 +9,9 @@ updates the moving major version pointer (e.g. `v1`).
 
 ## Prerequisites
 
-Before the workflow can run, enable one repo setting in your consumer repo:
+Two one-time setup steps are required before the first pipeline run:
+
+### 1. Enable Actions PR creation
 
 **Settings → Actions → General → Workflow permissions**
 → Check **"Allow GitHub Actions to create and approve pull requests"**
@@ -19,6 +21,26 @@ Before the workflow can run, enable one repo setting in your consumer repo:
 >
 > Note: declaring `pull-requests: write` in your workflow is necessary but **not
 > sufficient** — this repo-level setting must also be enabled.
+
+### 2. (Optional) Add a release-please config file
+
+The workflow includes a built-in default configuration (`release-type: simple`,
+root package). **No config files are required** for standard single-package repos.
+
+If you need custom configuration (e.g., changelog sections, monorepo packages,
+bump strategies), create `.release-please-config.json` in your repo root — it will
+automatically override the built-in default:
+
+```json
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "release-type": "simple",
+  "packages": { ".": {} }
+}
+```
+
+The `.release-please-manifest.json` (version tracking file) is created and managed
+automatically by release-please after the first run — you do not need to create it.
 
 ---
 
@@ -167,6 +189,12 @@ same commit as the version tag — in the same pipeline run, atomically.
 ---
 
 ## Known Limitations
+
+**Commits ignored / no Release PR created (custom config path)**: If you are using
+a custom `config-file` input pointing to a path that doesn't exist, the workflow
+falls back to the built-in default — but if the path exists and contains invalid
+JSON, release-please will error. Verify your config file path and content if using
+a non-default location.
 
 **"GitHub Actions is not permitted to create or approve pull requests"**: This error
 means the repo-level Actions setting is not enabled. Go to Settings → Actions →
