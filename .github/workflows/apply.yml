@@ -59,6 +59,9 @@ jobs:
           key: tofu-providers-${{ runner.os }}-${{ hashFiles('**/.terraform.lock.hcl') }}
           restore-keys: tofu-providers-${{ runner.os }}-
 
+      - name: Create plugin cache dir
+        run: mkdir -p ~/.terraform.d/plugin-cache
+
       - name: Pre-apply plan (verify non-empty)
         run: |
           cd environments/${{ inputs.target-environment }}
