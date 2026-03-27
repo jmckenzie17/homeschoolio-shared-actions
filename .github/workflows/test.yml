@@ -112,7 +112,7 @@ jobs:
       # ── Stage 3: OPA/Conftest custom policies ─────────────────────────────
       - name: Install Conftest
         run: |
-          curl -sL "https://github.com/open-policy-agent/conftest/releases/latest/download/conftest_Linux_x86_64.tar.gz" \
+          curl -sL "https://github.com/open-policy-agent/conftest/releases/download/v0.67.1/conftest_0.67.1_Linux_x86_64.tar.gz" \
             | tar xz -C /usr/local/bin conftest
           conftest --version
 
@@ -138,8 +138,8 @@ jobs:
         if: always()
         uses: github/codeql-action/upload-sarif@v3
         with:
-          sarif_file: "."
-          category: infrastructure-security
+          sarif_file: tfsec-results.sarif
+          category: tfsec
 
       - name: Archive SARIF artifacts
         if: always()
