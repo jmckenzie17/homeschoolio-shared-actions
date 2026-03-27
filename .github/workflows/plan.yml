@@ -95,13 +95,14 @@ jobs:
             echo "=== Planning $root ==="
             (
               cd "$root"
-              terragrunt init -upgrade -no-color
-              terragrunt plan -out=tfplan.binary -no-color
+              terragrunt init -upgrade -no-color -input=false
+              terragrunt plan -out=tfplan.binary -no-color -input=false
               terragrunt show -json tfplan.binary > tfplan.json
               cp tfplan.json "$GITHUB_WORKSPACE/plan-outputs/$(echo $root | tr '/' '-').json"
             )
           done
         env:
+          TF_INPUT: "0"
           ARM_USE_OIDC: "true"
           ARM_CLIENT_ID: ${{ secrets.backend-credentials }}
           ARM_TENANT_ID: ${{ secrets.azure-tenant-id }}
