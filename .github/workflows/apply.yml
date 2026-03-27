@@ -62,20 +62,10 @@ jobs:
       - name: Create plugin cache dir
         run: mkdir -p ~/.terraform.d/plugin-cache
 
-      - name: Pre-apply plan (verify non-empty)
+      - name: Init
         run: |
           cd environments/${{ inputs.target-environment }}
           terragrunt run-all init -upgrade -no-color
-          terragrunt run-all plan -out=tfplan.binary -detailed-exitcode -no-color
-          EXIT=$?
-          # exit code 2 = changes present (expected), 0 = no changes, 1 = error
-          if [ "$EXIT" -eq 0 ]; then
-            echo "::notice::No changes to apply for ${{ inputs.target-environment }}. Skipping apply."
-            echo "no-changes=true" >> "$GITHUB_ENV"
-          elif [ "$EXIT" -ne 2 ]; then
-            echo "::error::terragrunt plan failed with exit code $EXIT"
-            exit 1
-          fi
         env:
           TF_PLUGIN_CACHE_DIR: ~/.terraform.d/plugin-cache
           ARM_USE_OIDC: "true"
@@ -85,7 +75,6 @@ jobs:
 
       - name: Apply to ${{ inputs.target-environment }}
         id: apply
-        if: env.no-changes != 'true'
         run: |
           cd environments/${{ inputs.target-environment }}
           terragrunt run-all apply -auto-approve -no-color
