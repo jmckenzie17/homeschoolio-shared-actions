@@ -40,10 +40,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Download plan artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: ${{ inputs.plan-json-artifact }}
           path: plan-outputs/
@@ -136,14 +136,14 @@ jobs:
       # ── Upload SARIF results ───────────────────────────────────────────────
       - name: Merge and upload SARIF results
         if: always()
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: tfsec-results.sarif
           category: tfsec
 
       - name: Archive SARIF artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: security-sarif-${{ github.run_id }}
           path: "*.sarif"
