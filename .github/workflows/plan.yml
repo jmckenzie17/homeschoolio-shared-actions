@@ -43,6 +43,7 @@ jobs:
       id-token: write
       contents: read
       pull-requests: write
+      actions: write
     outputs:
       affected-roots: ${{ steps.detect.outputs.roots }}
       has-destructive-ops: ${{ steps.analyze.outputs.destructive }}
