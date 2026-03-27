@@ -168,7 +168,7 @@ jobs:
                   JSON.stringify(r.change?.actions) === '["delete","create"]'
                 ).length;
                 const destructive = del > 0 ? ' ⚠️ DESTRUCTIVE' : '';
-                body += `| ${f.replace('.json','')} | +${add} ~${chg} -${del}${destructive} |\n`;
+                body += `${f.replace('.json','')} | +${add} ~${chg} -${del}${destructive} |\n`;
               }
             }
             const destructive = '${{ steps.analyze.outputs.destructive }}' === 'true';
@@ -187,4 +187,5 @@ jobs:
         with:
           name: tfplan-json-${{ github.run_id }}
           path: plan-outputs/
+          if-no-files-found: ignore
           retention-days: 7
