@@ -67,7 +67,7 @@ jobs:
 
           # Count HIGH/CRITICAL findings and fail if any exist
           CRITICAL=$(tfsec . --minimum-severity HIGH --format csv --no-color 2>/dev/null \
-            | grep -v "^rule_id" | wc -l || echo "0")
+            | grep -v "^file" | wc -l || echo "0")
           echo "critical-count=$CRITICAL" >> "$GITHUB_OUTPUT"
 
           if [ "$CRITICAL" -gt 0 ]; then
