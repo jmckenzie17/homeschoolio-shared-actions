@@ -60,7 +60,7 @@ jobs:
           restore-keys: tofu-providers-${{ runner.os }}-
 
       - name: Create plugin cache dir
-        run: mkdir -p "${HOME}/.terraform.d/plugin-cache"
+        run: mkdir -p "${{ runner.temp }}/.terraform.d/plugin-cache"
 
       - name: Init
         run: |
@@ -73,6 +73,9 @@ jobs:
           ARM_CLIENT_ID: ${{ secrets.azure-client-id }}
           ARM_TENANT_ID: ${{ secrets.azure-tenant-id }}
           ARM_SUBSCRIPTION_ID: ${{ secrets.azure-subscription-id }}
+
+      - name: Debug generated backend configs
+        run: find environments/${{ inputs.target-environment }} -name backend.tf -exec echo "=== {} ===" \; -exec cat {} \;
 
       - name: Apply to ${{ inputs.target-environment }}
         id: apply
