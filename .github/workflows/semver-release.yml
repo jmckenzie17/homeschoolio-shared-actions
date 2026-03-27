@@ -94,3 +94,18 @@ jobs:
           git tag -fa "${MAJOR}" -m "Update ${MAJOR} tag to ${TAG}"
           git push origin "${MAJOR}" --force
           echo "major_tag=${MAJOR}" >> "${GITHUB_OUTPUT}"
+      - name: Upload release metadata artifact
+        if: steps.semantic-release.outputs.new_release_published == 'true'
+        run: |
+          mkdir -p release-metadata
+          echo "${{ steps.semantic-release.outputs.new_release_git_tag }}" > release-metadata/tag-name.txt
+          echo "${{ steps.semantic-release.outputs.new_release_version }}" > release-metadata/version.txt
+        shell: bash
+
+      - name: Upload release metadata
+        if: steps.semantic-release.outputs.new_release_published == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-metadata
+          path: release-metadata/
+          retention-days: 1
