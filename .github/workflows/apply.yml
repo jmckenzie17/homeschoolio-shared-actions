@@ -55,19 +55,19 @@ jobs:
       - name: Cache OpenTofu providers
         uses: actions/cache@v4
         with:
-          path: ~/.terraform.d/plugin-cache
+          path: ${{ runner.temp }}/.terraform.d/plugin-cache
           key: tofu-providers-${{ runner.os }}-${{ hashFiles('**/.terraform.lock.hcl') }}
           restore-keys: tofu-providers-${{ runner.os }}-
 
       - name: Create plugin cache dir
-        run: mkdir -p ~/.terraform.d/plugin-cache
+        run: mkdir -p "${HOME}/.terraform.d/plugin-cache"
 
       - name: Init
         run: |
           cd environments/${{ inputs.target-environment }}
-          terragrunt run-all init -upgrade -no-color
+          terragrunt run-all init --terragrunt-non-interactive -upgrade -no-color
         env:
-          TF_PLUGIN_CACHE_DIR: ~/.terraform.d/plugin-cache
+          TF_PLUGIN_CACHE_DIR: ${{ format('{0}/.terraform.d/plugin-cache', runner.temp) }}
           ARM_USE_OIDC: "true"
           ARM_CLIENT_ID: ${{ secrets.azure-client-id }}
           ARM_TENANT_ID: ${{ secrets.azure-tenant-id }}
@@ -77,10 +77,10 @@ jobs:
         id: apply
         run: |
           cd environments/${{ inputs.target-environment }}
-          terragrunt run-all apply -auto-approve -no-color
+          terragrunt run-all apply --terragrunt-non-interactive -auto-approve -no-color
           echo "sha=${{ github.sha }}" >> "$GITHUB_OUTPUT"
         env:
-          TF_PLUGIN_CACHE_DIR: ~/.terraform.d/plugin-cache
+          TF_PLUGIN_CACHE_DIR: ${{ format('{0}/.terraform.d/plugin-cache', runner.temp) }}
           ARM_USE_OIDC: "true"
           ARM_CLIENT_ID: ${{ secrets.azure-client-id }}
           ARM_TENANT_ID: ${{ secrets.azure-tenant-id }}
