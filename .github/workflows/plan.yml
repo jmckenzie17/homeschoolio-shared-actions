@@ -57,6 +57,9 @@ jobs:
             -o /usr/local/bin/terragrunt
           chmod +x /usr/local/bin/terragrunt
 
+      - name: Create plugin cache dir
+        run: mkdir -p ~/.terraform.d/plugin-cache
+
       - name: Cache OpenTofu providers
         uses: actions/cache@v4
         with:
