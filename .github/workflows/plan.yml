@@ -112,6 +112,7 @@ jobs:
           ARM_CLIENT_ID: ${{ secrets.backend-credentials }}
           ARM_TENANT_ID: ${{ secrets.azure-tenant-id }}
           ARM_SUBSCRIPTION_ID: ${{ secrets.azure-subscription-id }}
+          ARM_SKIP_PROVIDER_REGISTRATION: "true"
 
       - name: Analyze plans for destructive operations
         id: analyze
