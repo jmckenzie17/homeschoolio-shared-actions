@@ -62,26 +62,23 @@ jobs:
       - name: Create plugin cache dir
         run: mkdir -p "${{ runner.temp }}/.terraform.d/plugin-cache"
 
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.azure-client-id }}
+          tenant-id: ${{ secrets.azure-tenant-id }}
+          subscription-id: ${{ secrets.azure-subscription-id }}
+
       - name: Init
         run: |
           cd environments/${{ inputs.target-environment }}
           terragrunt run-all init --terragrunt-non-interactive -upgrade -no-color
         env:
           TF_PLUGIN_CACHE_DIR: ${{ format('{0}/.terraform.d/plugin-cache', runner.temp) }}
-          ARM_USE_OIDC: "true"
           ARM_USE_AZUREAD: "true"
           ARM_CLIENT_ID: ${{ secrets.azure-client-id }}
           ARM_TENANT_ID: ${{ secrets.azure-tenant-id }}
           ARM_SUBSCRIPTION_ID: ${{ secrets.azure-subscription-id }}
-
-      - name: Debug generated backend configs
-        run: |
-          echo "=== Searching for backend.tf files ==="
-          find . -name backend.tf 2>/dev/null || echo "No backend.tf found anywhere"
-          echo "=== .terragrunt-cache directories ==="
-          find environments/${{ inputs.target-environment }} -type d -name '.terragrunt-cache' 2>/dev/null || echo "No .terragrunt-cache found"
-          echo "=== All files in environments/${{ inputs.target-environment }} (first 50) ==="
-          find environments/${{ inputs.target-environment }} -type f | head -50
 
       - name: Apply to ${{ inputs.target-environment }}
         id: apply
@@ -91,7 +88,6 @@ jobs:
           echo "sha=${{ github.sha }}" >> "$GITHUB_OUTPUT"
         env:
           TF_PLUGIN_CACHE_DIR: ${{ format('{0}/.terraform.d/plugin-cache', runner.temp) }}
-          ARM_USE_OIDC: "true"
           ARM_USE_AZUREAD: "true"
           ARM_CLIENT_ID: ${{ secrets.azure-client-id }}
           ARM_TENANT_ID: ${{ secrets.azure-tenant-id }}
