@@ -75,7 +75,7 @@ jobs:
           ARM_SUBSCRIPTION_ID: ${{ secrets.azure-subscription-id }}
 
       - name: Debug generated backend configs
-        run: find environments/${{ inputs.target-environment }} -path '*/.terragrunt-cache/*/backend.tf' -exec echo "=== {} ===" \; -exec cat {} \;
+        run: find environments/${{ inputs.target-environment }} -name backend.tf -not -path '*/.terraform/*' -exec echo "=== {} ===" \; -exec cat {} \;
 
       - name: Apply to ${{ inputs.target-environment }}
         id: apply
