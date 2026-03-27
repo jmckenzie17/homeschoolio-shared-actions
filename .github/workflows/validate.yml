@@ -50,22 +50,12 @@ jobs:
           chmod +x /usr/local/bin/terragrunt
           terragrunt --version
 
-      - name: Cache OpenTofu providers
-        uses: actions/cache@v4
-        with:
-          path: ~/.terraform.d/plugin-cache
-          key: tofu-providers-${{ runner.os }}-${{ hashFiles('**/.terraform.lock.hcl') }}
-          restore-keys: tofu-providers-${{ runner.os }}-
-
       - name: Check HCL formatting
         run: terragrunt run-all fmt --check --no-color
-        env:
-          TF_PLUGIN_CACHE_DIR: ~/.terraform.d/plugin-cache
 
       - name: Validate all roots
         run: terragrunt run-all validate --no-color
         env:
-          TF_PLUGIN_CACHE_DIR: ~/.terraform.d/plugin-cache
           ARM_CLIENT_ID: ${{ secrets.backend-credentials }}
 
       - name: Set result
