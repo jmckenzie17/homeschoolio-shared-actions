@@ -20,6 +20,10 @@ on:
         required: true
       backend-credentials:
         required: false
+      azure-tenant-id:
+        required: false
+      azure-subscription-id:
+        required: false
     outputs:
       affected-roots:
         description: Comma-separated paths of changed environment roots
@@ -100,6 +104,8 @@ jobs:
         env:
           ARM_USE_OIDC: "true"
           ARM_CLIENT_ID: ${{ secrets.backend-credentials }}
+          ARM_TENANT_ID: ${{ secrets.azure-tenant-id }}
+          ARM_SUBSCRIPTION_ID: ${{ secrets.azure-subscription-id }}
 
       - name: Analyze plans for destructive operations
         id: analyze
