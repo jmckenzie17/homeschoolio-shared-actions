@@ -36,10 +36,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Setup OpenTofu
-        uses: opentofu/setup-opentofu@v2
+        uses: opentofu/setup-opentofu@fc711fa910b93cba0f3fbecaafc9f42fd0c411cb # v2
         with:
           tofu_version: ${{ inputs.opentofu-version }}
 
@@ -57,8 +57,10 @@ jobs:
         run: terragrunt run-all validate --no-color
         env:
           ARM_CLIENT_ID: ${{ secrets.backend-credentials }}
+          TF_CLI_ARGS_init: "-backend=false"
 
       - name: Set result
         id: result
         if: success()
         run: echo "passed=true" >> "$GITHUB_OUTPUT"
+
