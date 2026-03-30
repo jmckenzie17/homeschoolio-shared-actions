@@ -1,9 +1,11 @@
 # homeschoolio-shared-actions Development Guidelines
 
-Auto-generated from all feature plans. Last updated: 2026-03-26
+Auto-generated from all feature plans. Last updated: 2026-03-30
 
 ## Active Technologies
 - N/A (Git tags and GitHub Releases are the persistent artifacts) (001-semver-cicd-pipelines)
+- YAML (GitHub Actions workflow syntax) — no application runtime + `opentofu/setup-opentofu` (SHA-pinned), `azure/login` (SHA-pinned), `actions/checkout` (SHA-pinned), `actions/cache` (SHA-pinned), Terragrunt CLI (binary download) (002-terraform-destroy-workflow)
+- N/A — remote Terraform state (Azure Blob / equivalent); no local state (002-terraform-destroy-workflow)
 
 - YAML (GitHub Actions workflow syntax) — no application runtime + `cycjimmy/semantic-release-action@b12c8f6015dc215fe37bc154d4ad456dd3833c90` (v6.0.0), `actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5` (v4.3.1) (001-semver-cicd-pipelines)
 
@@ -34,7 +36,7 @@ docs/
 YAML (GitHub Actions workflow syntax) — no application runtime: Follow standard conventions
 
 ## Recent Changes
-- 001-semver-cicd-pipelines: Added YAML (GitHub Actions workflow syntax) — no application runtime
+- 002-terraform-destroy-workflow: Added YAML (GitHub Actions workflow syntax) — no application runtime + `opentofu/setup-opentofu` (SHA-pinned), `azure/login` (SHA-pinned), `actions/checkout` (SHA-pinned), `actions/cache` (SHA-pinned), Terragrunt CLI (binary download)
 - 001-semver-cicd-pipelines: Added YAML (GitHub Actions workflow syntax) — no application runtime
 - 001-semver-cicd-pipelines: Added YAML (GitHub Actions workflow syntax) — no application runtime
 
