@@ -57,8 +57,10 @@ jobs:
         run: terragrunt run-all validate --no-color
         env:
           ARM_CLIENT_ID: ${{ secrets.backend-credentials }}
+          TF_CLI_ARGS_init: "-backend=false"
 
       - name: Set result
         id: result
         if: success()
         run: echo "passed=true" >> "$GITHUB_OUTPUT"
+
