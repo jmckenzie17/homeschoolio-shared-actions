@@ -168,7 +168,13 @@ jobs:
             if (fs.existsSync(planDir)) {
               for (const f of fs.readdirSync(planDir)) {
                 if (!f.endsWith('.json')) continue;
-                const plan = JSON.parse(fs.readFileSync(path.join(planDir, f)));
+                let plan;
+                try {
+                  plan = JSON.parse(fs.readFileSync(path.join(planDir, f)));
+                } catch (e) {
+                  body += `${f.replace('.json','')} | ⚠️ plan unavailable |\n`;
+                  continue;
+                }
                 const changes = (plan.resource_changes || []);
                 const add = changes.filter(r => r.change?.actions?.includes('create')).length;
                 const chg = changes.filter(r => r.change?.actions?.includes('update')).length;
