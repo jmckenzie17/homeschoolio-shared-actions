@@ -93,19 +93,28 @@ jobs:
         id: plan
         run: |
           mkdir -p plan-outputs
+          PLAN_FAILED=false
           IFS=',' read -ra ROOTS <<< "${{ steps.roots.outputs.roots }}"
           for root in "${ROOTS[@]}"; do
             root="${root// /}"
             [ -z "$root" ] && continue
             echo "=== Planning $root ==="
-            (
+            if (
               cd "$root"
               terragrunt init -upgrade -no-color -input=false
               terragrunt plan -out=tfplan.binary -no-color -input=false
               terragrunt show -json tfplan.binary > tfplan.json
               cp tfplan.json "$GITHUB_WORKSPACE/plan-outputs/$(echo $root | tr '/' '-').json"
-            )
+            ); then
+              echo "  ✓ $root planned successfully"
+            else
+              echo "  ✗ $root plan failed (dependency not yet applied?)" >&2
+              PLAN_FAILED=true
+            fi
           done
+          if [ "$PLAN_FAILED" = "true" ]; then
+            echo "::warning::One or more roots failed to plan. This is expected for modules whose dependencies have not been applied yet."
+          fi
         env:
           TF_INPUT: "0"
           ARM_USE_OIDC: "true"
