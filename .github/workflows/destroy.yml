@@ -130,15 +130,22 @@ jobs:
               | awk '{s+=$1} END{print s+0}')
           fi
 
-          echo "## Destroy Summary" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Environment | Resources Destroyed | Status |" >> "$GITHUB_STEP_SUMMARY"
-          echo "|-------------|---------------------|--------|" >> "$GITHUB_STEP_SUMMARY"
-
           if [ "$STATUS" = "success" ]; then
-            echo "| $ENV | $DESTROYED | ✅ Success |" >> "$GITHUB_STEP_SUMMARY"
+            {
+              echo "## Destroy Summary"
+              echo ""
+              echo "| Environment | Resources Destroyed | Status |"
+              echo "|-------------|---------------------|--------|"
+              echo "| $ENV | $DESTROYED | ✅ Success |"
+            } >> "$GITHUB_STEP_SUMMARY"
           else
-            echo "| $ENV | $DESTROYED | ❌ Failed |" >> "$GITHUB_STEP_SUMMARY"
-            echo "" >> "$GITHUB_STEP_SUMMARY"
-            echo "> ⚠️ **Destroy failed or was incomplete.** Check the logs above to identify resources that were not destroyed and remediate manually." >> "$GITHUB_STEP_SUMMARY"
+            {
+              echo "## Destroy Summary"
+              echo ""
+              echo "| Environment | Resources Destroyed | Status |"
+              echo "|-------------|---------------------|--------|"
+              echo "| $ENV | $DESTROYED | ❌ Failed |"
+              echo ""
+              echo "> ⚠️ **Destroy failed or was incomplete.** Check the logs above to identify resources that were not destroyed and remediate manually."
+            } >> "$GITHUB_STEP_SUMMARY"
           fi
