@@ -51,9 +51,7 @@ jobs:
           terragrunt --version
 
       - name: Check HCL formatting
-        run: terragrunt run-all fmt --check --no-color
-        env:
-          TF_CLI_ARGS_init: "-backend=false"
+        run: tofu fmt -check -recursive
 
       - name: Validate all roots
         run: terragrunt run-all validate --no-color
