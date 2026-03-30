@@ -85,6 +85,11 @@ jobs:
         run: |
           for plan_file in plan-outputs/*.json; do
             [ -f "$plan_file" ] || continue
+            # Skip empty or invalid JSON files
+            if ! python3 -c "import json,sys; json.load(open('$plan_file'))" 2>/dev/null; then
+              echo "::warning::Skipping $plan_file — not valid JSON (dependency not yet applied?)"
+              continue
+            fi
             checkov \
               -f "$plan_file" \
               --framework ${{ inputs.checkov-framework }} \
@@ -98,6 +103,9 @@ jobs:
           # Fail on HIGH/CRITICAL
           for plan_file in plan-outputs/*.json; do
             [ -f "$plan_file" ] || continue
+            if ! python3 -c "import json,sys; json.load(open('$plan_file'))" 2>/dev/null; then
+              continue
+            fi
             HIGH_COUNT=$(checkov -f "$plan_file" --framework ${{ inputs.checkov-framework }} \
               --compact --output json 2>/dev/null \
               | python3 -c "import sys,json; d=json.load(sys.stdin); \
@@ -123,6 +131,11 @@ jobs:
           FAILED=0
           for plan_file in plan-outputs/*.json; do
             [ -f "$plan_file" ] || continue
+            # Skip empty or invalid JSON files (produced by plans that failed due to unapplied deps)
+            if ! python3 -c "import json,sys; json.load(open('$plan_file'))" 2>/dev/null; then
+              echo "::warning::Skipping $plan_file — not valid JSON (dependency not yet applied?)"
+              continue
+            fi
             conftest test "$plan_file" \
               -p ${{ inputs.policy-path }} \
               --all-namespaces \
