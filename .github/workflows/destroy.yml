@@ -1,0 +1,144 @@
+name: Destroy
+
+on:
+  workflow_call:
+    inputs:
+      target-environment:
+        description: One of dev, staging, or production
+        type: string
+        required: true
+      confirm-destroy:
+        description: Must be set to true to proceed; guards against accidental invocation
+        type: boolean
+        required: true
+      opentofu-version:
+        description: OpenTofu CLI version to install
+        type: string
+        default: "1.6.2"
+      terragrunt-version:
+        description: Terragrunt CLI version to install
+        type: string
+        default: "0.56.3"
+    secrets:
+      azure-client-id:
+        required: true
+      azure-tenant-id:
+        required: true
+      azure-subscription-id:
+        required: true
+      github-token:
+        required: true
+      pg_admin_password:
+        description: PostgreSQL administrator password passed as TF_VAR_pg_admin_password to OpenTofu
+        required: false
+    outputs:
+      destroyed-sha:
+        description: Commit SHA that was in effect when infrastructure was destroyed
+        value: ${{ jobs.destroy.outputs.destroyed-sha }}
+
+jobs:
+  destroy:
+    name: Destroy ${{ inputs.target-environment }}
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.target-environment }}
+    permissions:
+      id-token: write
+      contents: read
+    outputs:
+      destroyed-sha: ${{ steps.destroy.outputs.sha }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Confirm destroy
+        run: |
+          if [ "${{ inputs.confirm-destroy }}" != "true" ]; then
+            echo "::error::confirm-destroy must be set to true. Set the input explicitly to acknowledge intentional teardown."
+            exit 1
+          fi
+
+      - name: Setup OpenTofu
+        uses: opentofu/setup-opentofu@9d84900f3238fab8cd84ce47d658d25dd008be2f # v1
+        with:
+          tofu_version: ${{ inputs.opentofu-version }}
+
+      - name: Install Terragrunt
+        run: |
+          curl -sL "https://github.com/gruntwork-io/terragrunt/releases/download/v${{ inputs.terragrunt-version }}/terragrunt_linux_amd64" \
+            -o /usr/local/bin/terragrunt
+          chmod +x /usr/local/bin/terragrunt
+
+      - name: Cache OpenTofu providers
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ${{ runner.temp }}/.terraform.d/plugin-cache
+          key: tofu-providers-${{ runner.os }}-${{ hashFiles('**/.terraform.lock.hcl') }}
+          restore-keys: tofu-providers-${{ runner.os }}-
+
+      - name: Create plugin cache dir
+        run: mkdir -p "${{ runner.temp }}/.terraform.d/plugin-cache"
+
+      - name: Azure Login
+        uses: azure/login@1384c340ab2dda50fed2bee3041d1d87018aa5e8 # v2
+        with:
+          client-id: ${{ secrets.azure-client-id }}
+          tenant-id: ${{ secrets.azure-tenant-id }}
+          subscription-id: ${{ secrets.azure-subscription-id }}
+
+      - name: Init
+        run: |
+          cd environments/${{ inputs.target-environment }}
+          terragrunt run-all init --terragrunt-non-interactive -upgrade -no-color
+        env:
+          TF_PLUGIN_CACHE_DIR: ${{ format('{0}/.terraform.d/plugin-cache', runner.temp) }}
+          ARM_USE_AZUREAD: "true"
+          ARM_CLIENT_ID: ${{ secrets.azure-client-id }}
+          ARM_TENANT_ID: ${{ secrets.azure-tenant-id }}
+          ARM_SUBSCRIPTION_ID: ${{ secrets.azure-subscription-id }}
+          TF_VAR_pg_admin_password: ${{ secrets.pg_admin_password }}
+
+      - name: Destroy ${{ inputs.target-environment }}
+        id: destroy
+        continue-on-error: false
+        run: |
+          set -o pipefail
+          cd environments/${{ inputs.target-environment }}
+          terragrunt run-all destroy --terragrunt-non-interactive -auto-approve -no-color \
+            2>&1 | tee "$GITHUB_WORKSPACE/destroy-output.log"
+          echo "sha=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+        env:
+          TF_PLUGIN_CACHE_DIR: ${{ format('{0}/.terraform.d/plugin-cache', runner.temp) }}
+          ARM_USE_AZUREAD: "true"
+          ARM_CLIENT_ID: ${{ secrets.azure-client-id }}
+          ARM_TENANT_ID: ${{ secrets.azure-tenant-id }}
+          ARM_SUBSCRIPTION_ID: ${{ secrets.azure-subscription-id }}
+          TF_VAR_pg_admin_password: ${{ secrets.pg_admin_password }}
+
+      - name: Job summary
+        if: always()
+        run: |
+          ENV="${{ inputs.target-environment }}"
+          STATUS="${{ steps.destroy.outcome }}"
+          LOG="$GITHUB_WORKSPACE/destroy-output.log"
+
+          # Sum "N destroyed" counts from Terragrunt per-module output lines
+          DESTROYED=0
+          if [ -f "$LOG" ]; then
+            DESTROYED=$(grep -E 'Resources: [0-9]+ destroyed' "$LOG" \
+              | grep -E -o '[0-9]+ destroyed' \
+              | awk '{s+=$1} END{print s+0}')
+          fi
+
+          echo "## Destroy Summary" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Environment | Resources Destroyed | Status |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|-------------|---------------------|--------|" >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "$STATUS" = "success" ]; then
+            echo "| $ENV | $DESTROYED | ✅ Success |" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "| $ENV | $DESTROYED | ❌ Failed |" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "> ⚠️ **Destroy failed or was incomplete.** Check the logs above to identify resources that were not destroyed and remediate manually." >> "$GITHUB_STEP_SUMMARY"
+          fi
