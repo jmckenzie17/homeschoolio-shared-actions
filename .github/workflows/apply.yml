@@ -24,6 +24,9 @@ on:
         required: true
       github-token:
         required: true
+      pg_admin_password:
+        description: PostgreSQL administrator password passed as TF_VAR_pg_admin_password to OpenTofu
+        required: false
     outputs:
       applied-sha:
         description: Commit SHA successfully applied
@@ -79,6 +82,7 @@ jobs:
           ARM_CLIENT_ID: ${{ secrets.azure-client-id }}
           ARM_TENANT_ID: ${{ secrets.azure-tenant-id }}
           ARM_SUBSCRIPTION_ID: ${{ secrets.azure-subscription-id }}
+          TF_VAR_pg_admin_password: ${{ secrets.pg_admin_password }}
 
       - name: Apply to ${{ inputs.target-environment }}
         id: apply
@@ -92,3 +96,4 @@ jobs:
           ARM_CLIENT_ID: ${{ secrets.azure-client-id }}
           ARM_TENANT_ID: ${{ secrets.azure-tenant-id }}
           ARM_SUBSCRIPTION_ID: ${{ secrets.azure-subscription-id }}
+          TF_VAR_pg_admin_password: ${{ secrets.pg_admin_password }}
