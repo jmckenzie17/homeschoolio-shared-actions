@@ -13,7 +13,7 @@ jobs:
       - name: Lint semver-release.yml with actionlint
         uses: rhysd/actionlint@393031adb9afb225ee52ae2ccd7a5af5525e03e8 # v1.7.11
         with:
-          files: .github/workflows/semver-release.yml
+          args: .github/workflows/semver-release.yml
 
   dry-run:
     runs-on: ubuntu-latest
@@ -35,6 +35,9 @@ jobs:
             ]
           }
           EOF
+
+      - name: Install semantic-release plugins
+        run: npm install --no-save @semantic-release/commit-analyzer @semantic-release/release-notes-generator @semantic-release/github
 
       - name: Verify semantic-release can parse commits (dry run)
         run: |
