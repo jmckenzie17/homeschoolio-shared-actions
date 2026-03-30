@@ -36,10 +36,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        uses: actions/checkout@v6
 
       - name: Setup OpenTofu
-        uses: opentofu/setup-opentofu@fc711fa910b93cba0f3fbecaafc9f42fd0c411cb # v2
+        uses: opentofu/setup-opentofu@v2
         with:
           tofu_version: ${{ inputs.opentofu-version }}
 
@@ -52,6 +52,8 @@ jobs:
 
       - name: Check HCL formatting
         run: terragrunt run-all fmt --check --no-color
+        env:
+          TF_CLI_ARGS_init: "-backend=false"
 
       - name: Validate all roots
         run: terragrunt run-all validate --no-color
@@ -63,4 +65,3 @@ jobs:
         id: result
         if: success()
         run: echo "passed=true" >> "$GITHUB_OUTPUT"
-
